@@ -1,0 +1,101 @@
+{
+  "default": "QGIS",
+  "fonts": [
+    {
+      "family": "Noto Sans",
+      "google": "Noto+Sans:ital,wght@0,300..700;1,300..700",
+      "fallback": "sans-serif"
+    },
+    {
+      "family": "Source Serif 4",
+      "google": "Source+Serif+4:ital,opsz,wght@0,8..60,300..600;1,8..60,300..600",
+      "fallback": "serif"
+    },
+    {
+      "family": "IBM Plex Mono",
+      "google": "IBM+Plex+Mono:ital,wght@0,400;0,500;1,400;1,500",
+      "fallback": "monospace"
+    },
+    {
+      "family": "Doto",
+      "google": "Doto:ital,wght@0,100..900;1,100..900",
+      "fallback": "sans-serif"
+    }
+  ],
+  "styles": [
+    {
+      "name": "QGIS",
+      "css": {
+        "--accent": "#d6336c",
+        "--ink": "#1a1a1a",
+        "--ink-dim": "#555555",
+        "--ink-faint": "#8a8a8a",
+        "--panel-bg": "#ffffff",
+        "--panel-line": "#c8c8c8",
+        "--space": "#ffffff",
+        "--font-title": "'Noto Sans', sans-serif",
+        "--font-display": "'Noto Sans', sans-serif",
+        "--font-body": "'Noto Sans', sans-serif",
+        "--font-label": "'Noto Sans', sans-serif",
+        "--font-ui": "'Noto Sans', sans-serif",
+        "--weight-title": "600",
+        "--weight-display": "500",
+        "--weight-body": "400",
+        "--label-weight": "500",
+        "--title-size": "22px",
+        "--name-size": "20px",
+        "--body-size": "13px",
+        "--label-size": "11px",
+        "--label-case": "none",
+        "--label-tracking": "0",
+        "--style-body": "normal",
+        "--style-display": "normal",
+        "--style-title": "normal",
+        "--style-label": "normal"
+      },
+      "map": {
+        "background": "#ffffff",
+        "noData": "#e6e6e6",
+        "areaLine": "#9a9a9a",
+        "accent": "#d6336c"
+      }
+    },
+    {
+      "name": "Sad Earth",
+      "css": {
+        "--accent": "#eb2c65",
+        "--ink": "#e7e7e7",
+        "--ink-dim": "#959595",
+        "--ink-faint": "#606060",
+        "--panel-bg": "#121212",
+        "--panel-line": "#343434",
+        "--space": "#0b0b0b",
+        "--font-title": "'Doto', sans-serif",
+        "--font-display": "'Source Serif 4', serif",
+        "--font-body": "'Source Serif 4', serif",
+        "--font-label": "'IBM Plex Mono', monospace",
+        "--font-ui": "'IBM Plex Mono', monospace",
+        "--weight-title": "500",
+        "--weight-display": "300",
+        "--weight-body": "400",
+        "--label-weight": "500",
+        "--title-size": "35px",
+        "--name-size": "33px",
+        "--body-size": "14px",
+        "--label-size": "11px",
+        "--label-case": "uppercase",
+        "--label-tracking": "0.1em",
+        "--style-body": "normal",
+        "--style-display": "italic",
+        "--style-title": "normal",
+        "--style-label": "normal"
+      },
+      "map": {
+        "background": "#151515",
+        "noData": "#202020",
+        "areaLine": "#606060",
+        "accent": "#eb2c65"
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portrait of a Nation</title>
+  <!-- Fonts, the last-used look (page hidden until it is on), the stylesheets and the error box: js/head.js -->
+  <script src="js/head.js" data-css="lib/maplibre-gl.css css/style.css"></script>
+  <script src="lib/papaparse.min.js"></script>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Control panel -->
+  <section id="controls" class="controls">
+    <h1 class="title" id="title">Portrait of a Nation</h1>
+    <p class="count" id="count">loading…</p>
+    <details class="problems" id="problems" hidden></details>
+    <div class="control-group">
+      <span class="control-label">Look</span>
+      <div class="segmented" role="group" aria-label="Look" id="looks"></div>
+    </div>
+    <div class="control-group">
+      <span class="control-label">Datasets</span>
+      <p class="hint" id="datasets-hint">No datasets added yet.</p>
+    </div>
+  </section>
+
+  <!-- Area info panel -->
+  <aside id="panel" class="panel" hidden>
+    <button type="button" class="close" data-close="panel" aria-label="Close">×</button>
+    <div class="panel-body" id="panel-body"></div>
+  </aside>
+
+  <!-- Loads js/config.js and js/app.js fresh on every visit (js/head.js). -->
+  <script>mapStart('app');</script>
+</body>
+</html>

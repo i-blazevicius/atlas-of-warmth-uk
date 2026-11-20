@@ -1,0 +1,87 @@
+/* ─────────────────────────────────────────────────────────────
+   Page styling. The built-in values are the QGIS look; the looks in data/styles.json
+   override them. Map colours are in the looks too ("map" in data/styles.json).
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  --space: #ffffff;             /* page background behind the map */
+  --ink: #1a1a1a;               /* main text */
+  --ink-dim: #555555;           /* secondary text */
+  --ink-faint: #8a8a8a;         /* codes, small print */
+  --accent: #d6336c;            /* interface accents and the selected area */
+  --panel-bg: rgba(255, 255, 255, 0.92);
+  --panel-line: #c8c8c8;
+  --panel-width: 340px;
+  --radius: 2px;
+
+  --font-title: 'Noto Sans', system-ui, sans-serif;
+  --font-display: 'Noto Sans', system-ui, sans-serif;
+  --font-body: 'Noto Sans', system-ui, sans-serif;
+  --font-ui: 'Noto Sans', system-ui, sans-serif;
+  --font-label: 'Noto Sans', system-ui, sans-serif;
+  --weight-title: 600;
+  --weight-display: 500;
+  --weight-body: 400;
+  --style-title: normal;
+  --style-display: normal;
+  --style-body: normal;
+  --style-label: normal;
+  --title-size: 22px;
+  --name-size: 20px;
+  --body-size: 13px;
+  --label-case: none;
+  --label-tracking: 0;
+  --label-size: 11px;
+  --label-weight: 500;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--space); color: var(--ink); }
+html.styling body { visibility: hidden; }   /* until the look is on (js/styles.js → reveal) */
+body { font-family: var(--font-body); font-weight: var(--weight-body); font-style: var(--style-body); font-size: var(--body-size); overflow: hidden; }
+#map { position: absolute; inset: 0; z-index: 0; }
+
+.controls, .panel {
+  position: absolute; z-index: 2;
+  background: var(--panel-bg); border: 1px solid var(--panel-line); border-radius: var(--radius);
+  padding: 14px 16px; width: var(--panel-width);
+}
+.controls { top: 12px; left: 12px; max-height: calc(100% - 24px); overflow: auto; }
+.panel { top: 12px; right: 12px; max-height: calc(100% - 24px); overflow: auto; }
+.panel[hidden], .problems[hidden] { display: none; }
+.panel .close {
+  position: absolute; top: 6px; right: 8px; border: 0; background: none; color: var(--ink-dim);
+  font-size: 22px; line-height: 1; cursor: pointer;
+}
+
+.title { margin: 0 0 4px; font-family: var(--font-title); font-weight: var(--weight-title); font-style: var(--style-title); font-size: var(--title-size); }
+.count, .hint { margin: 0 0 10px; color: var(--ink-dim); }
+.control-group { margin-top: 12px; }
+.control-label {
+  display: block; margin-bottom: 4px; color: var(--ink-faint);
+  font-family: var(--font-label); font-weight: var(--label-weight); font-style: var(--style-label);
+  font-size: var(--label-size); text-transform: var(--label-case); letter-spacing: var(--label-tracking);
+}
+
+.segmented { display: flex; border: 1px solid var(--panel-line); border-radius: var(--radius); overflow: hidden; }
+.segmented button {
+  flex: 1; padding: 5px 8px; border: 0; border-right: 1px solid var(--panel-line);
+  background: none; color: var(--ink-dim); font: inherit; font-family: var(--font-ui); cursor: pointer;
+}
+.segmented button:last-child { border-right: 0; }
+.segmented button[aria-pressed="true"] { background: var(--ink); color: var(--space); }
+
+.problems { margin: 6px 0; color: var(--ink-dim); }
+.problems summary { cursor: pointer; color: var(--accent); }
+
+.area-code { color: var(--ink-faint); font-family: var(--font-label); font-size: var(--label-size); }
+.area-name { margin: 2px 0 8px; font-family: var(--font-display); font-weight: var(--weight-display); font-style: var(--style-display); font-size: var(--name-size); }
+
+/* The full-page error box (js/head.js → mapFail) */
+.fatal {
+  position: fixed; z-index: 10; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  max-width: 520px; padding: 18px 22px; background: var(--panel-bg); border: 1px solid var(--accent); border-radius: var(--radius);
+}
+.fatal p { margin: 0 0 8px; }
+.fatal strong { margin-right: 8px; color: var(--accent); }
+.fatal small { color: var(--ink-dim); }
