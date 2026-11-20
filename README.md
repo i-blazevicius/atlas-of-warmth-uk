@@ -52,8 +52,8 @@ Columns in datasets are matched by **header text** (exact, then "starts with"), 
 - `js/config.js` – settings
 - `css/style.css` – styling (built-in values are the QGIS look)
 - `data/styles.json` – the looks and their fonts
-- `source/` – originals as downloaded (Excel, CSV, JSON, boundary files) for the build scripts to read. GitHub Pages
-  serves everything in the repository, so keep files here well under GitHub's 100 MB per-file limit
+- `source/` – originals as downloaded (Excel, CSV, JSON, boundary files) for the build scripts to read. The files themselves are
+  git-ignored (too big for GitHub's 100 MB per-file limit); only the folder's note is committed
 - `lib/` – MapLibre GL JS 6.18 (BSD licence) and Papa Parse 5.5 (MIT), kept here so the page has no outside
   dependencies apart from Google Fonts
 
