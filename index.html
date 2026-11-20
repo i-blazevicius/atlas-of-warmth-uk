@@ -3,10 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>Portrait of a Nation</title>
   <!-- Fonts, the last-used look (page hidden until it is on), the stylesheets and the error box: js/head.js -->
   <script src="js/head.js" data-css="lib/maplibre-gl.css css/style.css"></script>
   <script src="lib/papaparse.min.js"></script>
+  <script src="lib/pmtiles.js"></script>
 </head>
 <body>
   <div id="map"></div>
@@ -21,10 +23,20 @@
       <div class="segmented" role="group" aria-label="Look" id="looks"></div>
     </div>
     <div class="control-group">
-      <span class="control-label">Datasets</span>
-      <p class="hint" id="datasets-hint">No datasets added yet.</p>
+      <span class="control-label">Dataset</span>
+      <p class="dataset-name" id="dataset-name"></p>
+      <div class="measures" id="measures" role="radiogroup" aria-label="Measure"></div>
     </div>
   </section>
+
+  <!-- Legend and north arrow (a QGIS-style map furniture; the scale bar is MapLibre's, bottom left) -->
+  <div id="furniture" class="furniture">
+    <div class="legend" id="legend"></div>
+    <svg class="north" id="north" viewBox="0 0 24 40" aria-label="North">
+      <path d="M12 2 L20 30 L12 24 L4 30 Z" class="north-arrow"/>
+      <text x="12" y="39" text-anchor="middle" class="north-n">N</text>
+    </svg>
+  </div>
 
   <!-- Area info panel -->
   <aside id="panel" class="panel" hidden>

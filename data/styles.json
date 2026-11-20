@@ -57,7 +57,20 @@
         "background": "#ffffff",
         "noData": "#e6e6e6",
         "areaLine": "#9a9a9a",
-        "accent": "#d6336c"
+        "accent": "#d6336c",
+        "ramp": [
+          "#67000d",
+          "#a50f15",
+          "#d7301f",
+          "#ef6548",
+          "#fc8d59",
+          "#fdbb84",
+          "#fdd49e",
+          "#fee8c8",
+          "#fff3d9",
+          "#fffbea"
+        ],
+        "selected": "#111111"
       }
     },
     {
@@ -94,7 +107,20 @@
         "background": "#151515",
         "noData": "#202020",
         "areaLine": "#606060",
-        "accent": "#eb2c65"
+        "accent": "#eb2c65",
+        "ramp": [
+          "#eb2c65",
+          "#da3163",
+          "#ca3561",
+          "#b93a60",
+          "#a83e5e",
+          "#98435c",
+          "#87475a",
+          "#764c59",
+          "#665057",
+          "#555555"
+        ],
+        "selected": "#ffffff"
       }
     }
   ]
