@@ -4,11 +4,10 @@ Interactive map of the UK for visualising data: switch between datasets, colour 
 area to see its local information. A static site (GitHub Pages), no build step on the page, no paid services.
 Working title: the repository's name; change `title` in `js/config.js`.
 
-> **Status.** Deprivation for England, Wales and Scotland on one UK-wide dataset (Northern Ireland's data is in, its
-> boundaries are not yet), over an OpenFreeMap base map with its own on/off, opacity and place-name switch, and a
-> dataset opacity slider. Planned next: administrative outlines (nations, England's regions, local authorities) and
-> Northern Ireland's boundaries; then the indicators behind each decile, loaded on demand; more datasets; vector PDF
-> export; bivariate maps.
+> **Status.** Deprivation for all four nations on one UK-wide dataset, over an OpenFreeMap base map (on/off, opacity,
+> place names), with outlines of nations, England's regions and local authorities (each switchable) and a dataset
+> opacity slider. Planned next: the indicators behind each decile, loaded on demand; more datasets; vector PDF export;
+> bivariate maps.
 
 Started from the code of the Atlas of Warmth (`i-blazevicius/atlas-of-warmth`, commit `018269d`). Code is
 copied, not shared: if the same bug has to be fixed in both, extract the shared part then.
@@ -26,10 +25,15 @@ map colours and the 10-class colour ramp (`map`). Settings it leaves out go back
   data is shown without it and a problem is listed. Set in `js/config.js` → `underlay`.
 - **Shapes**: one PMTiles file per boundary set, holding only the area code, read by byte ranges straight from GitHub
   Pages: `data/tiles/lsoa-2021-ew.pmtiles` (England and Wales LSOAs 2021) and `data/tiles/dz-2011-s.pmtiles`
-  (Scotland's data zones 2011). `js/config.js` → `areas` says which codes each file holds. Rebuild only when
+  (Scotland's data zones 2011) and `data/tiles/soa-2001-n.pmtiles` (Northern Ireland's SOAs 2001, merged from NISRA's 2001
+  output areas by `tools/build_ni_soa.py`, as NISRA's own SOA download was unavailable). `js/config.js` → `areas` says which codes each file holds. Rebuild only when
   boundaries change: `python3 tools/build_tiles.py <boundaries> data/tiles/<name>.pmtiles` (set `CODE_FIELD=` to
   the code column; needs `geopandas` and [tippecanoe](https://github.com/felt/tippecanoe), `TIPPECANOE=` if it isn't on
   the PATH). Each rebuilt file adds its size to the repository's history, so don't rebuild casually.
+- **Outlines**: `data/tiles/outlines.pmtiles`, built by `python3 tools/build_outlines.py` from ONS Countries and Regions
+  (Dec 2021, BGC) and Local Authority Districts (May 2026, BGC). Only borders between neighbouring areas are kept, so the
+  coast isn't traced twice; Northern Ireland's land border with Ireland is dropped with it (the base map shows it).
+  Each level has a white casing so it reads over dark colours; widths and colours in `js/config.js` → `outlines`.
 - **Values**: plain CSV keyed by area code, read by the page and written into each area's feature state once at load
   (~0.2 s for 43,500 areas). Switching measure only changes the colour expression; data changes never touch the tiles.
 - **Deprivation** (`data/deprivation-uk.csv`, built by `python3 tools/build_deprivation.py` from the originals in

@@ -39,7 +39,25 @@ export default {
       centroids: 'data/dz-2011-s-centroids.csv',
       label: 'Data zones (2011), Scotland',
     },
-    // Northern Ireland's 2001 SOAs (codes like 95AA01S1) go here once their boundaries are in.
+    soa: {
+      file: 'data/tiles/soa-2001-n.pmtiles',
+      layer: 'areas', code: 'code',
+      codes: '^95',
+      centroids: 'data/soa-2001-n-centroids.csv',
+      label: 'Super Output Areas (2001), Northern Ireland',   // built from the 2001 output areas: tools/build_ni_soa.py
+    },
+  },
+
+  // Administrative outlines over the data (tools/build_outlines.py): only borders between neighbouring areas, no coast.
+  // Each has a white casing under it so it reads over dark colours. `width` is [at zoom 5, at zoom 12] in pixels;
+  // `from` is the zoom it fades in at.
+  outlines: {
+    file: 'data/tiles/outlines.pmtiles',
+    layers: [
+      { id: 'lads', label: 'Local authorities', color: '#3a3a3a', width: [0.5, 1.6], from: 6, on: true },
+      { id: 'regions', label: 'Regions (England)', color: '#222222', width: [1.1, 2.6], from: 4, on: true },
+      { id: 'nations', label: 'Nations', color: '#111111', width: [1.8, 3.6], from: 3, on: true },
+    ],
   },
 
   // The four nations, as they appear in the `nation` column of a dataset.
@@ -63,9 +81,9 @@ export default {
         E: 'English indices of deprivation 2025 (MHCLG), LSOA 2021.',
         W: 'Welsh Index of Multiple Deprivation 2025 (Welsh Government), LSOA 2021.',
         S: 'Scottish Index of Multiple Deprivation 2020v2 (Scottish Government), data zones 2011. Domain deciles derived from the ranks.',
-        N: 'Northern Ireland Multiple Deprivation Measure 2017 (NISRA), SOA 2001. Deciles derived from the ranks.',
+        N: 'Northern Ireland Multiple Deprivation Measure 2017 (NISRA), SOA 2001 (shapes merged from NISRA’s 2001 output areas). Deciles derived from the ranks.',
       },
-      licence: 'All under the Open Government Licence v3.0. Boundaries: ONS (LSOA 2021 BGC), Scottish Government (data zones 2011).',
+      licence: 'Data and boundaries under the Open Government Licence v3.0.',
       measures: [
         { id: 'imd', label: 'Overall deprivation',
           names: { E: 'Index of Multiple Deprivation', W: 'Welsh Index of Multiple Deprivation', S: 'Scottish Index of Multiple Deprivation', N: 'Multiple Deprivation Measure' } },
@@ -92,7 +110,7 @@ export default {
   ],
 
   // Credits for the boundaries, shown with the base map's in the map's attribution (bottom right).
-  attribution: 'Boundaries: Source: Office for National Statistics and Scottish Government, licensed under the Open Government Licence v3.0. Contains OS data © Crown copyright and database right 2025.',
+  attribution: 'Boundaries: Office for National Statistics, Scottish Government, NISRA; Open Government Licence v3.0. Contains OS data © Crown copyright and database right 2026.',
 
   // Starting view: the whole UK. [longitude, latitude], zoom.
   view: {

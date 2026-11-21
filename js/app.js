@@ -55,6 +55,29 @@ for (const a of AREA_SETS) {
       paint: { 'line-color': M.areaLine ?? '#9a9a9a', 'line-width': 0.4, 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0, 11, 0.7] } },
   );
 }
+// Administrative outlines: a white casing, then the line, for each level (local authorities lowest).
+const OUTLINES = CONFIG.outlines?.layers ?? [];
+state.outlines = Object.fromEntries(OUTLINES.map((o) => [o.id, o.on !== false]));
+if (CONFIG.outlines?.file) {
+  sources.outlines = { type: 'vector', url: `pmtiles://${new URL(CONFIG.outlines.file, location.href).href}` };
+  for (const o of OUTLINES) {
+    const w = (k) => ['interpolate', ['linear'], ['zoom'], 5, o.width[0] * k, 12, o.width[1] * k];
+    const fade = (max) => ['interpolate', ['linear'], ['zoom'], o.from, 0, o.from + 0.8, max];
+    const casing = ['interpolate', ['linear'], ['zoom'], 5, o.width[0] + 2, 12, o.width[1] + 3];
+    layers.push({ id: `outline-casing-${o.id}`, type: 'line', source: 'outlines', 'source-layer': o.id,
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#ffffff', 'line-width': casing, 'line-opacity': fade(0.85) } });
+    layers.push(
+      { id: `outline-${o.id}`, type: 'line', source: 'outlines', 'source-layer': o.id,
+        layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': o.color, 'line-width': w(1), 'line-opacity': fade(1) } },
+    );
+  }
+}
+function applyOutlines() {
+  for (const o of OUTLINES) for (const id of [`outline-${o.id}`, `outline-casing-${o.id}`]) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', state.outlines[o.id] ? 'visible' : 'none');
+  }
+}
 for (const a of AREA_SETS) {
   layers.push({ id: `selected-${a.id}`, type: 'line', source: `areas-${a.id}`, 'source-layer': a.layer, filter: ['==', ['get', a.code], ''],
     paint: { 'line-color': M.selected ?? '#111111', 'line-width': 2.5 } });
@@ -86,7 +109,7 @@ async function addUnderlay() {
     style = await res.json();
   } catch (e) {
     problem(`The base map could not be loaded (${e.message}); the data is shown without it.`);
-    $('base-controls').hidden = true;
+    for (const id of ['base-on', 'base-labels']) $(id)?.closest('.layer-row')?.remove();
     return;
   }
   if (style.glyphs) map.setGlyphs(style.glyphs);
@@ -213,6 +236,20 @@ function buildBaseControls() {
   names.addEventListener('change', () => { state.base.labels = names.checked; applyUnderlay(); });
   row2.append(names, Object.assign(document.createElement('label'), { htmlFor: 'base-labels', textContent: 'Place names' }));
   box.append(row, row2);
+  if (!OUTLINES.length) return;
+  const head = Object.assign(document.createElement('span'), { className: 'control-label outline-head', textContent: 'Outlines' });
+  box.append(head);
+  for (const o of [...OUTLINES].reverse()) {          // nations first
+    const r = document.createElement('div');
+    r.className = 'layer-row';
+    const c = Object.assign(document.createElement('input'), { type: 'checkbox', checked: state.outlines[o.id], id: `outline-on-${o.id}` });
+    c.addEventListener('change', () => { state.outlines[o.id] = c.checked; applyOutlines(); });
+    const swatch = Object.assign(document.createElement('i'), { className: 'outline-swatch' });
+    swatch.style.borderTopWidth = `${Math.max(1, Math.round(o.width[0] + 0.5))}px`;
+    swatch.style.borderTopColor = o.color;
+    r.append(c, Object.assign(document.createElement('label'), { htmlFor: `outline-on-${o.id}`, textContent: o.label }), swatch);
+    box.append(r);
+  }
 }
 function buildDatasetControls() {
   const box = $('datasets');
@@ -365,7 +402,10 @@ async function start() {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   map.addControl(new maplibregl.ScaleControl({ maxWidth: 140, unit: 'metric' }), 'bottom-left');
   map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: CONFIG.attribution }), 'bottom-right');
+  // Start with the credits folded into their ⓘ button (MapLibre opens them on wide screens).
+  map.once('idle', () => document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'));
   buildBaseControls();
+  applyOutlines();
   const underlay = addUnderlay();
 
   for (const a of AREA_SETS) {
