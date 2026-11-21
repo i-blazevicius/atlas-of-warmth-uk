@@ -2,6 +2,11 @@
   "default": "QGIS",
   "fonts": [
     {
+      "family": "Doto",
+      "google": "Doto:wght@100..900",
+      "fallback": "sans-serif"
+    },
+    {
       "family": "Noto Sans",
       "google": "Noto+Sans:ital,wght@0,300..700;1,300..700",
       "fallback": "sans-serif"
@@ -11,23 +16,23 @@
     {
       "name": "QGIS",
       "css": {
-        "--accent": "#d6336c",
+        "--accent": "#111111",
         "--ink": "#1a1a1a",
         "--ink-dim": "#555555",
         "--ink-faint": "#8a8a8a",
         "--panel-bg": "#ffffff",
         "--panel-line": "#c8c8c8",
         "--space": "#ffffff",
-        "--font-title": "'Noto Sans', sans-serif",
+        "--font-title": "'Doto', sans-serif",
         "--font-display": "'Noto Sans', sans-serif",
         "--font-body": "'Noto Sans', sans-serif",
         "--font-label": "'Noto Sans', sans-serif",
         "--font-ui": "'Noto Sans', sans-serif",
-        "--weight-title": "600",
+        "--weight-title": "700",
         "--weight-display": "500",
         "--weight-body": "400",
         "--label-weight": "500",
-        "--title-size": "22px",
+        "--title-size": "26px",
         "--name-size": "20px",
         "--body-size": "13px",
         "--label-size": "11px",
@@ -42,7 +47,7 @@
         "background": "#ffffff",
         "noData": "#e6e6e6",
         "areaLine": "#9a9a9a",
-        "accent": "#d6336c",
+        "accent": "#111111",
         "ramp": [
           "#67000d",
           "#a50f15",

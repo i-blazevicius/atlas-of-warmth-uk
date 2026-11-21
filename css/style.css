@@ -8,7 +8,7 @@
   --ink: #1a1a1a;               /* main text */
   --ink-dim: #555555;           /* secondary text */
   --ink-faint: #8a8a8a;         /* codes, small print */
-  --accent: #d6336c;            /* interface accents and the selected area */
+  --accent: #111111;            /* interface accents and the selected area */
   --panel-bg: rgba(255, 255, 255, 0.92);
   --panel-line: #c8c8c8;
   --panel-width: 340px;

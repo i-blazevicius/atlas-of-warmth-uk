@@ -90,6 +90,14 @@ const map = new maplibregl.Map({
   center: V.center, zoom: V.zoom, minZoom: V.minZoom, maxZoom: V.maxZoom,
   attributionControl: false,
 });
+// Zooming out stops where the data's full extent just fits the window (re-worked when the window is resized).
+function limitZoomOut() {
+  if (!V.extent) return;
+  const cam = map.cameraForBounds(V.extent, { padding: 8 });
+  if (cam?.zoom != null) map.setMinZoom(Math.max(V.minZoom ?? 0, cam.zoom - 0.02));
+}
+limitZoomOut();
+map.on('resize', limitZoomOut);
 map.dragRotate.disable();                  // the map stays north-up, so the north arrow stays true
 map.touchZoomRotate.disableRotation();
 const mapLoaded = new Promise((resolve) => map.once('load', resolve));
@@ -115,8 +123,17 @@ async function addUnderlay() {
   if (style.glyphs) map.setGlyphs(style.glyphs);
   if (style.sprite) map.setSprite(style.sprite);
   for (const [id, src] of Object.entries(style.sources ?? {})) map.addSource(`base:${id}`, src);
+  let mask = null;
+  if (U.labelsMask) {
+    try { mask = (await (await fetch(U.labelsMask)).json()).geometry; }
+    catch (e) { problem(`The outline for hiding labels outside the UK could not be loaded (${e.message}); all place names are shown.`); }
+  }
+  // Road numbers sit in "shield" layers (or draw the road's ref); street names are left alone.
+  const isRoadNumber = (l) => l.type === 'symbol' && (/shield/i.test(l.id) || /\bref\b|\{ref\}/.test(JSON.stringify(l.layout?.['text-field'] ?? '')) && !/name/.test(JSON.stringify(l.layout?.['text-field'] ?? '')));
   for (const l of style.layers ?? []) {
+    if (U.hideRoadNumbers && isRoadNumber(l)) continue;
     const layer = { ...l, id: `base:${l.id}` };
+    if (mask && l.type === 'symbol') layer.filter = l.filter ? ['all', l.filter, ['within', mask]] : ['within', mask];
     if (l.source) layer.source = `base:${l.source}`;
     const isLabel = l.type === 'symbol';
     map.addLayer(layer, isLabel ? undefined : FILLS[0]);      // labels on top; the rest under the data

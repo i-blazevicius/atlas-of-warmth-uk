@@ -93,3 +93,10 @@ Columns in datasets are matched by **header text** (exact, then "starts with"), 
 
 Serve the folder with `python3 tools/serve.py .` and open `http://localhost:8765/`. Python's own `http.server` won't do: PMTiles needs byte-range requests. In the cloud workspace the
 map is checked with headless Chrome (`puppeteer-core`, SwiftShader for software WebGL).
+
+## Look and base-map settings
+
+- **Accent colour** is black (`--accent` and `map.accent` in `data/styles.json`). The pink one is `#d6336c`: paste it back in both places to restore it.
+- **Title font** is Doto (`--font-title` in `data/styles.json`).
+- **Base-map labels** outside the UK are hidden using `data/uk-mask.json` (rebuild with `tools/build_uk_mask.py`). Road numbers are left out; street names stay. Both are switches under `underlay` in `js/config.js`.
+- **Zoom-out limit** stops where `view.extent` (js/config.js) just fits the window.

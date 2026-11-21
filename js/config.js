@@ -20,6 +20,8 @@ export default {
     label: 'Base map',
     opacity: 1,                       // starting opacity, 0…1
     labels: true,                     // place names on at start
+    labelsMask: 'data/uk-mask.json',  // labels outside this outline are hidden (tools/build_uk_mask.py); remove to show all
+    hideRoadNumbers: true,            // road numbers and motorway shields are never drawn; street names stay
   },
 
   // Boundaries: PMTiles files holding only the shapes and the area code (tools/build_tiles.py).
@@ -54,9 +56,9 @@ export default {
   outlines: {
     file: 'data/tiles/outlines.pmtiles',
     layers: [
-      { id: 'lads', label: 'Local authorities', color: '#3a3a3a', width: [0.5, 1.6], from: 6, on: true },
-      { id: 'regions', label: 'Regions (England)', color: '#222222', width: [1.1, 2.6], from: 4, on: true },
-      { id: 'nations', label: 'Nations', color: '#111111', width: [1.8, 3.6], from: 3, on: true },
+      { id: 'lads', label: 'Local authorities', color: '#3a3a3a', width: [0.35, 1.1], from: 6, on: true },
+      { id: 'regions', label: 'Regions (England)', color: '#222222', width: [0.6, 1.8], from: 4, on: true },
+      { id: 'nations', label: 'Nations', color: '#111111', width: [1.1, 2.6], from: 3, on: true },
     ],
   },
 
@@ -116,7 +118,8 @@ export default {
   view: {
     center: [-3.2, 55.0],
     zoom: 5.0,
-    minZoom: 4,
+    minZoom: 4,                       // the floor; the map also stops at the data's full extent (below)
+    extent: [[-8.7, 49.8], [1.9, 60.9]],   // [[west, south], [east, north]]: zooming out stops when this just fits
     maxZoom: 15,
   },
 };
