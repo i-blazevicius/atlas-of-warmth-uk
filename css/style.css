@@ -156,12 +156,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .maplibregl-ctrl-group button + button { border-top: 1px solid var(--panel-line); }
 /* Credits: a box as wide as the zoom buttons holding a plain letter i; opened, the text sits to its left with some room */
 .maplibregl-ctrl-attrib.maplibregl-compact { min-height: 29px; padding: 0 29px 0 0; }
-.maplibregl-ctrl-attrib.maplibregl-compact-show { padding: 6px 41px 6px 10px; }
-.maplibregl-ctrl-attrib-inner { line-height: 1.45; }
+.maplibregl-ctrl-attrib.maplibregl-compact-show { padding: 0 41px 0 10px; }   /* text, a gap, then the i box */
+.maplibregl-ctrl-attrib-inner { display: flex; align-items: center; min-height: 29px; line-height: 1.4; }
 .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button,
 .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button {
   top: auto; bottom: 0; right: 0; width: 29px; height: 29px; border: 0; border-radius: 0; outline: none; box-shadow: none;
-  background: none; color: var(--ink); font: 500 15px/29px var(--font-ui); text-align: center;
+  background: none; color: var(--ink); font: 500 20px/29px var(--font-title); text-align: center;
   -webkit-tap-highlight-color: transparent;
 }
 .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button::before { content: 'i'; }

@@ -99,19 +99,20 @@ function limitZoomOut() {
 }
 limitZoomOut();
 map.on('resize', limitZoomOut);
-// A wall: the view can't be dragged beyond the data's extent. Along a side where the window shows more than the
-// extent (always the case fully zoomed out), the view is held centred, so the furthest zoom-out is effectively fixed.
+// A wall: the view can't be dragged far past the data's extent. The extent may be pushed this share of the window
+// beyond the window's edges (room for the panels to sit over empty map), no further.
 if (V.extent) {
   const M = (lng, lat) => maplibregl.MercatorCoordinate.fromLngLat([lng, lat]);
-  const slack = V.wallPadding ?? 0;            // extra room, as a share of the extent's size
+  const slack = V.wallSlack ?? 0.25;
   const [[w, so], [e, n]] = V.extent, nw = M(w, n), se = M(e, so);
-  const px = (se.x - nw.x) * slack, py = (se.y - nw.y) * slack;
-  const X0 = nw.x - px, X1 = se.x + px, Y0 = nw.y - py, Y1 = se.y + py;
-  const clamp = (c, half, lo, hi) => (hi - lo <= 2 * half ? (lo + hi) / 2 : Math.min(Math.max(c, lo + half), hi - half));
+  const clamp = (c, size, lo, hi) => {                   // keeps the window's centre where the window still overlaps lo..hi by enough
+    const l = lo - size * slack + size / 2, h = hi + size * slack - size / 2;
+    return l >= h ? (l + h) / 2 : Math.min(Math.max(c, l), h);
+  };
   map.on('move', () => {
     const b = map.getBounds(), tl = M(b.getWest(), b.getNorth()), br = M(b.getEast(), b.getSouth());
     const c = M(map.getCenter().lng, map.getCenter().lat);
-    const x = clamp(c.x, (br.x - tl.x) / 2, X0, X1), y = clamp(c.y, (br.y - tl.y) / 2, Y0, Y1);
+    const x = clamp(c.x, br.x - tl.x, nw.x, se.x), y = clamp(c.y, br.y - tl.y, nw.y, se.y);
     if (Math.abs(x - c.x) > 1e-9 || Math.abs(y - c.y) > 1e-9) map.setCenter(new maplibregl.MercatorCoordinate(x, y).toLngLat());
   });
 }
