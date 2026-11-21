@@ -253,7 +253,9 @@ function coverage(ds, m) {
 function slider(value, onInput, label) {
   const r = Object.assign(document.createElement('input'), { type: 'range', min: 0, max: 100, step: 5, value: Math.round(value * 100) });
   r.setAttribute('aria-label', label);
-  r.addEventListener('input', () => onInput(Number(r.value) / 100));
+  const fill = () => r.style.setProperty('--p', `${r.value}%`);       // the filled part of the line
+  fill();
+  r.addEventListener('input', () => { fill(); onInput(Number(r.value) / 100); });
   return r;
 }
 // A foldable group: a master checkbox, a title, an optional opacity slider, and a body that keeps its own
