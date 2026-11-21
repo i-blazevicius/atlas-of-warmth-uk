@@ -85,6 +85,15 @@ nations (NI councils come from the local authority tiles, which also hold other 
 differently in each nation and NI's figure is a different statistic, so each nation has its own edges: compare areas within a
 nation only.
 
+## PDF export
+
+The "Export PDF" group in the control panel saves the map as a vector PDF (areas, outlines, title, legend, scale bar, north arrow and credits are paths and text, so they stay sharp at any size). Choose the current view or the whole UK, and a page size in millimetres.
+
+- The shapes are read back from the map at the zoom being exported and simplified lightly, so the PDF matches the screen. Detail follows the window size: a larger window gives a more detailed PDF.
+- The base map is a picture (place names a separate transparent picture above the data), because it is drawn from tiles.
+- `js/pdf.js` is a small PDF writer (one page, Helvetica, opacity, images); `js/export.js` turns the map into a page.
+- Not included: the Doto title face (Helvetica is used), and the selected-area highlight.
+
 ## Addresses
 
 An area has its own address (the map moves to it), so Back and Forward work and any area can be bookmarked or shared:

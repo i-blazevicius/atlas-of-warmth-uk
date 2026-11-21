@@ -200,3 +200,11 @@ input[type="range"]::-moz-range-thumb { width: 5px; height: 18px; background: va
 .ind-median { display: block; font-size: 10.5px; }
 .ind-none { color: var(--ink-faint); }
 .ind-note { margin: 4px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.35; }
+
+/* PDF export */
+.export-row label { display: flex; gap: 6px; align-items: center; }
+.export-row input[type=number] { width: 4.5em; }
+.export-btn { margin-top: 6px; }
+.export-status { margin: 4px 0 0; font-size: 12px; }
+.busy { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(255,255,255,.7); font-size: 16px; }
+.busy[hidden] { display: none; }

@@ -373,13 +373,13 @@ function buildDatasetControls() {
 }
 
 // ── Legend ─────────────────────────────────────────────────
-function renderLegend() {
+// What the legend says, as data: used for the on-screen legend and the PDF.
+function legendModel() {
   const { dataset: ds, measure } = state.active ?? {};
-  if (!ds || !ds.visible) { $('furniture').hidden = true; return; }
-  $('furniture').hidden = false;
-  const label = (i) => (i === 1 ? '1 · most deprived 10%' : i === 10 ? '10 · least deprived 10%' : String(i));
+  if (!ds || !ds.visible) return null;
   const cov = coverage(ds, measure);
-  let rows;
+  const title = [measure.label, `${ds.label}${cov ? ` · ${cov} only` : ''}`];
+  let head = '', rows;
   if (measure.kind === 'rate') {
     const cl = classesOf(ds, measure), unit = measure.unit ?? cl.unit ?? '';
     // One column of class edges, or one per nation when the edges differ (nations with the same edges share a column).
@@ -390,14 +390,23 @@ function renderLegend() {
       if (same) same.label += `, ${NATIONS[n]}`; else cols.push({ label: NATIONS[n], br: cl.breaks[n] });
     }
     const edge = (br, i) => (i === 0 ? `< ${br[0]}${unit}` : i === br.length ? `> ${br[i - 1]}${unit}` : `${br[i - 1]}–${br[i]}${unit}`);
-    rows = (cols.length > 1 ? `<div class="legend-row legend-head"><i></i>${cols.map((c) => c.label).join(' · ')}</div>` : '') +
-      cl.colours.map((c, i) => `<div class="legend-row"><i style="background:${esc(c)}"></i>${cols.map((k) => edge(k.br, i)).join(' · ')}</div>`).join('');
+    if (cols.length > 1) head = cols.map((c) => c.label).join(' · ');
+    rows = cl.colours.map((c, i) => ({ colour: c, label: cols.map((k) => edge(k.br, i)).join(' · ') }));
   } else {
-    rows = RAMP.map((c, i) => `<div class="legend-row"><i style="background:${c}"></i>${label(i + 1)}</div>`).join('');
+    const label = (i) => (i === 1 ? '1 · most deprived 10%' : i === 10 ? '10 · least deprived 10%' : String(i));
+    rows = RAMP.map((c, i) => ({ colour: c, label: label(i + 1) }));
   }
-  $('legend').innerHTML = `<p class="legend-title">${esc(measure.label)}<br>${esc(ds.label)}${cov ? ` · ${esc(cov)} only` : ''}</p>` + rows +
-    `<div class="legend-row"><i style="background:${esc(NO_DATA)}"></i>No data</div>` +
-    (ds.note ? `<p class="legend-note">${esc(ds.note)}</p>` : '');
+  rows.push({ colour: NO_DATA, label: 'No data' });
+  return { title, head, rows, note: ds.note ?? '' };
+}
+function renderLegend() {
+  const lg = legendModel();
+  $('furniture').hidden = !lg;
+  if (!lg) return;
+  $('legend').innerHTML = `<p class="legend-title">${lg.title.map(esc).join('<br>')}</p>` +
+    (lg.head ? `<div class="legend-row legend-head"><i></i>${esc(lg.head)}</div>` : '') +
+    lg.rows.map((r) => `<div class="legend-row"><i style="background:${esc(r.colour)}"></i>${esc(r.label)}</div>`).join('') +
+    (lg.note ? `<p class="legend-note">${esc(lg.note)}</p>` : '');
 }
 
 // ── Area panel ─────────────────────────────────────────────
@@ -630,4 +639,64 @@ async function start() {
 }
 start().catch(window.mapFail);
 
-window.portrait = { map, state, go, openArea };
+// ── PDF export ─────────────────────────────────────────────
+// The colour an area has on screen, from its feature state (the same rule as the paint expression).
+function featureColour(ds, m, st) {
+  if (m.kind === 'rate') {
+    const i = st[`${stateKey(ds, m)}:class`];
+    return i >= 0 && i != null ? classesOf(ds, m).colours[i] ?? NO_DATA : NO_DATA;
+  }
+  const v = st[stateKey(ds, m)];
+  return v ? RAMP[v - 1] ?? NO_DATA : NO_DATA;
+}
+function setBusy(on, text) {
+  let box = $('busy');
+  if (!box) {
+    box = Object.assign(document.createElement('div'), { id: 'busy', className: 'busy' });
+    document.body.append(box);
+  }
+  box.hidden = !on;
+  box.textContent = text ?? '';
+}
+function applyAll() { applyUnderlay(); applyOutlines(); paintMap(); }
+const exporter = (await import(`./export.js${q}`)).createExporter({ map, state, CONFIG, AREA_SETS, OUTLINES, legendModel, featureColour, applyAll, setBusy });
+async function exportPdf(opts) {
+  const { blob, areas } = await exporter.exportPdf(opts);
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${(CONFIG.title ?? 'map').toLowerCase().replace(/\W+/g, '-')}.pdf` });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  return { blob, areas };
+}
+function buildExportControls() {
+  const box = $('export-controls');
+  const field = (html) => Object.assign(document.createElement('div'), { className: 'export-row', innerHTML: html });
+  box.innerHTML = '';
+  const body = Object.assign(document.createElement('details'), { className: 'dataset' });
+  body.innerHTML = '<summary><span class="dataset-label">Export PDF</span></summary>';
+  const inner = Object.assign(document.createElement('div'), { className: 'measures' });
+  inner.append(
+    field('<label><input type="radio" name="exp-mode" value="view" checked><span>Current view</span></label>'),
+    field('<label><input type="radio" name="exp-mode" value="uk"><span>Whole UK</span></label>'),
+    field('<label>Page <input id="exp-w" type="number" min="50" max="2000" value="297"> × <input id="exp-h" type="number" min="50" max="2000" value="210"> mm</label>'),
+    ...[['title', 'Title'], ['legend', 'Legend'], ['scale', 'Scale bar'], ['north', 'North arrow'], ['basemap', 'Base map']]
+      .map(([id, t]) => field(`<label><input type="checkbox" id="exp-${id}" checked><span>${t}</span></label>`)),
+  );
+  const btn = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Export PDF', className: 'export-btn' });
+  const status = Object.assign(document.createElement('p'), { className: 'export-status' });
+  btn.addEventListener('click', async () => {
+    const g = (id) => $(`exp-${id}`);
+    btn.disabled = true; status.textContent = '';
+    try {
+      const r = await exportPdf({ mode: document.querySelector('input[name=exp-mode]:checked').value,
+        widthMm: Math.min(2000, Math.max(50, Number(g('w').value) || 297)), heightMm: Math.min(2000, Math.max(50, Number(g('h').value) || 210)),
+        title: g('title').checked, legend: g('legend').checked, scale: g('scale').checked, north: g('north').checked, basemap: g('basemap').checked });
+      status.textContent = `Saved (${fmt(r.areas)} areas, ${(r.blob.size / 1e6).toFixed(1)} MB).`;
+    } catch (e) { status.textContent = `The PDF could not be made: ${e.message}`; console.error(e); }
+    btn.disabled = false;
+  });
+  body.append(inner, btn, status);
+  box.append(body);
+}
+buildExportControls();
+
+window.portrait = { map, state, go, openArea, exportPdf };
