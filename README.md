@@ -4,20 +4,21 @@ Interactive map of the UK for visualising data: switch between datasets, colour 
 area to see its local information. A static site (GitHub Pages), no build step on the page, no paid services.
 Working title: the repository's name; change `title` in `js/config.js`.
 
-> **Status: step 2 of 4.** England's Indices of Deprivation 2025 (10 measures, by LSOA) are on the QGIS-style
-> map, with legend, scale bar, north arrow and a click panel. Wales shows as "no data" (its boundaries are in the
-> tiles, its data isn't added yet). Next: (3) the other nations, the dataset switcher and "visible datasets only"
-> in the click panel, (4) vector PDF export.
+> **Status: step 1 of the revised plan done.** England's Indices of Deprivation 2025 on the QGIS-style map, with
+> foldable control and legend panels, a compact click panel and links that move the map to the area. Planned next:
+> (2) OpenFreeMap underlay with its own opacity/visibility, an opacity slider for the data layer and administrative
+> outlines (nations, England's regions, local authorities); (3) the dataset panel (several datasets, on/off,
+> opacity) and Wales, Scotland and Northern Ireland; (4) the indicators behind each decile, loaded on demand;
+> (5) more datasets; (6) vector PDF export; (7) bivariate maps.
 
 Started from the code of the Atlas of Warmth (`i-blazevicius/atlas-of-warmth`, commit `018269d`). Code is
 copied, not shared: if the same bug has to be fixed in both, extract the shared part then.
 
-## Looks
+## Look
 
-Two, in `data/styles.json`: **QGIS** (default; plain, white, cartographic) and **Sad Earth** (dark, carried over
-from the Atlas). The visitor's choice is remembered in their browser. Each look sets the page's fonts and
-colours (`css`) and the map's colours (`map`). Settings a look leaves out go back to the built-in values in
-`css/style.css`.
+One look for now, the QGIS style (plain, white, cartographic), in `data/styles.json`: page fonts and colours (`css`),
+map colours and the 10-class colour ramp (`map`). Settings it leaves out go back to the built-in values in
+`css/style.css`. (A dark look, Sad Earth, was dropped; it is in the Atlas repository if wanted again.)
 
 ## How the data gets onto the map
 
@@ -31,11 +32,14 @@ colours (`css`) and the map's colours (`map`). Settings a look leaves out go bac
   expression. Reformatting a dataset or adding a derived column means re-running `python3 tools/build_data.py`
   (or editing the CSV): the tiles are not touched.
 - **Datasets and measures** are listed in `js/config.js` → `datasets`. Columns are found by header text.
-- **Click panel**: every measure of the dataset with decile and rank, plus where the local authority ranks.
+- **Click panel**: one coloured block per measure with the decile number inside; hovering a block or its label shows the
+  exact rank. A note gives the local authority's rank.
+- **Links**: `#E01033653` opens the area and moves the map there. The one-point-per-area file for this
+  (`data/lsoa-2021-ew-centroids.csv`, `tools/build_centroids.py`) is read only when a link or Back/Forward opens an area.
 
 ## Addresses
 
-An area has its own address (opening one doesn't move the map to it yet), so Back and Forward work and any area can be bookmarked or shared:
+An area has its own address (the map moves to it), so Back and Forward work and any area can be bookmarked or shared:
 `…/portrait-of-a-nation/#E06000001`. Area codes are ONS codes: `E`, `W`, `S` or `N` followed by 8 digits.
 
 ## When something goes wrong
@@ -62,7 +66,7 @@ Columns in datasets are matched by **header text** (exact, then "starts with"), 
 - `js/head.js` – shared start of every page: fonts, the last-used look, stylesheets, the error box
 - `js/app.js` – map behaviour, addresses, panels
 - `js/core.js` – errors, small problems, reading CSV files
-- `tools/build_tiles.py` – boundaries → PMTiles; `tools/build_data.py` – deprivation downloads → site CSVs; `tools/serve.py` – local test server with byte-range support
+- `tools/build_tiles.py` – boundaries → PMTiles; `tools/build_centroids.py` – boundaries → one point per area; `tools/build_data.py` – deprivation downloads → site CSVs; `tools/serve.py` – local test server with byte-range support
 - `js/styles.js` – the looks
 - `js/config.js` – settings
 - `css/style.css` – styling (built-in values are the QGIS look)

@@ -5,21 +5,6 @@
       "family": "Noto Sans",
       "google": "Noto+Sans:ital,wght@0,300..700;1,300..700",
       "fallback": "sans-serif"
-    },
-    {
-      "family": "Source Serif 4",
-      "google": "Source+Serif+4:ital,opsz,wght@0,8..60,300..600;1,8..60,300..600",
-      "fallback": "serif"
-    },
-    {
-      "family": "IBM Plex Mono",
-      "google": "IBM+Plex+Mono:ital,wght@0,400;0,500;1,400;1,500",
-      "fallback": "monospace"
-    },
-    {
-      "family": "Doto",
-      "google": "Doto:ital,wght@0,100..900;1,100..900",
-      "fallback": "sans-serif"
     }
   ],
   "styles": [
@@ -71,56 +56,6 @@
           "#fffbea"
         ],
         "selected": "#111111"
-      }
-    },
-    {
-      "name": "Sad Earth",
-      "css": {
-        "--accent": "#eb2c65",
-        "--ink": "#e7e7e7",
-        "--ink-dim": "#959595",
-        "--ink-faint": "#606060",
-        "--panel-bg": "#121212",
-        "--panel-line": "#343434",
-        "--space": "#0b0b0b",
-        "--font-title": "'Doto', sans-serif",
-        "--font-display": "'Source Serif 4', serif",
-        "--font-body": "'Source Serif 4', serif",
-        "--font-label": "'IBM Plex Mono', monospace",
-        "--font-ui": "'IBM Plex Mono', monospace",
-        "--weight-title": "500",
-        "--weight-display": "300",
-        "--weight-body": "400",
-        "--label-weight": "500",
-        "--title-size": "35px",
-        "--name-size": "33px",
-        "--body-size": "14px",
-        "--label-size": "11px",
-        "--label-case": "uppercase",
-        "--label-tracking": "0.1em",
-        "--style-body": "normal",
-        "--style-display": "italic",
-        "--style-title": "normal",
-        "--style-label": "normal"
-      },
-      "map": {
-        "background": "#151515",
-        "noData": "#202020",
-        "areaLine": "#606060",
-        "accent": "#eb2c65",
-        "ramp": [
-          "#eb2c65",
-          "#da3163",
-          "#ca3561",
-          "#b93a60",
-          "#a83e5e",
-          "#98435c",
-          "#87475a",
-          "#764c59",
-          "#665057",
-          "#555555"
-        ],
-        "selected": "#ffffff"
       }
     }
   ]

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:,">
   <title>Portrait of a Nation</title>
-  <!-- Fonts, the last-used look (page hidden until it is on), the stylesheets and the error box: js/head.js -->
+  <!-- Fonts, the saved look (page hidden until it is on), the stylesheets and the error box: js/head.js -->
   <script src="js/head.js" data-css="lib/maplibre-gl.css css/style.css"></script>
   <script src="lib/papaparse.min.js"></script>
   <script src="lib/pmtiles.js"></script>
@@ -13,32 +13,34 @@
 <body>
   <div id="map"></div>
 
-  <!-- Control panel -->
-  <section id="controls" class="controls">
-    <h1 class="title" id="title">Portrait of a Nation</h1>
-    <p class="count" id="count">loading…</p>
-    <details class="problems" id="problems" hidden></details>
-    <div class="control-group">
-      <span class="control-label">Look</span>
-      <div class="segmented" role="group" aria-label="Look" id="looks"></div>
+  <!-- Control panel (top left), foldable -->
+  <details id="controls" class="dock dock-top" open>
+    <summary><span class="title" id="title">Portrait of a Nation</span></summary>
+    <div class="dock-body">
+      <p class="count" id="count">loading…</p>
+      <details class="problems" id="problems" hidden></details>
+      <div class="control-group">
+        <span class="control-label">Dataset</span>
+        <p class="dataset-name" id="dataset-name"></p>
+        <div class="measures" id="measures" role="radiogroup" aria-label="Measure"></div>
+      </div>
     </div>
-    <div class="control-group">
-      <span class="control-label">Dataset</span>
-      <p class="dataset-name" id="dataset-name"></p>
-      <div class="measures" id="measures" role="radiogroup" aria-label="Measure"></div>
+  </details>
+
+  <!-- Legend and north arrow (bottom left, same width as the control panel), foldable.
+       The scale bar is MapLibre's, below it. -->
+  <details id="furniture" class="dock dock-bottom" open>
+    <summary>Legend</summary>
+    <div class="dock-body furniture">
+      <div class="legend" id="legend"></div>
+      <svg class="north" id="north" viewBox="0 0 24 40" aria-label="North">
+        <path d="M12 2 L20 30 L12 24 L4 30 Z" class="north-arrow"/>
+        <text x="12" y="39" text-anchor="middle" class="north-n">N</text>
+      </svg>
     </div>
-  </section>
+  </details>
 
-  <!-- Legend and north arrow (a QGIS-style map furniture; the scale bar is MapLibre's, bottom left) -->
-  <div id="furniture" class="furniture">
-    <div class="legend" id="legend"></div>
-    <svg class="north" id="north" viewBox="0 0 24 40" aria-label="North">
-      <path d="M12 2 L20 30 L12 24 L4 30 Z" class="north-arrow"/>
-      <text x="12" y="39" text-anchor="middle" class="north-n">N</text>
-    </svg>
-  </div>
-
-  <!-- Area info panel -->
+  <!-- Area info panel (right) -->
   <aside id="panel" class="panel" hidden>
     <button type="button" class="close" data-close="panel" aria-label="Close">×</button>
     <div class="panel-body" id="panel-body"></div>

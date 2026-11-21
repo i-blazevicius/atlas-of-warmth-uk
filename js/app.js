@@ -14,6 +14,12 @@ state.rows = new Map();      // area code -> [{ dataset, row }]
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Number(n).toLocaleString('en-GB');
+// Dark or white text, whichever reads better on a given background colour.
+function textOn(hex) {
+  const n = parseInt(String(hex).replace('#', ''), 16);
+  const lum = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.6 ? '#1a1a1a' : '#ffffff';
+}
 
 // ── Looks ──────────────────────────────────────────────────
 const lib = await Styles.loadLibrary(CONFIG, fail);
@@ -70,29 +76,6 @@ function paintMap() {
     map.setPaintProperty(`fill-${id}`, 'fill-color', dataset && dataset.areas === id ? fillExpression(dataset, measure) : (M().noData ?? '#e6e6e6'));
   }
 }
-
-// ── Looks: buttons ─────────────────────────────────────────
-function buildLookButtons() {
-  const box = $('looks');
-  box.innerHTML = '';
-  for (const s of lib.styles) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = s.name;
-    b.setAttribute('aria-pressed', String(s === look));
-    b.addEventListener('click', () => {
-      look = s;
-      Styles.applyCss(look, lib.fonts);
-      Styles.rememberChoice(s.name);
-      paintMap();
-      renderLegend();
-      if (state.selected) openArea(state.selected);
-      for (const x of box.children) x.setAttribute('aria-pressed', String(x.textContent === s.name));
-    });
-    box.append(b);
-  }
-}
-buildLookButtons();
 
 // ── Datasets ───────────────────────────────────────────────
 // Reads a dataset's CSV, finds its columns by header text and keeps one row per area code.
@@ -188,9 +171,12 @@ function openArea(code) {
     for (const m of ds.measures) {
       const v = Number(g(`v:${m.id}`)), rk = Number(g(`r:${m.id}`));
       const cur = state.active?.measure === m && state.active?.dataset === ds;
-      const colour = Number.isFinite(v) ? ramp()[v - 1] : (M().noData ?? '#e6e6e6');
-      html += `<div class="panel-measure${cur ? ' current' : ''}"><i style="background:${esc(colour)}"></i><span>${esc(m.label)}</span>` +
-        `<span class="rank">${Number.isFinite(v) ? `decile ${v}` : '–'}${Number.isFinite(rk) ? ` · rank ${fmt(rk)} of ${fmt(ds.total)}` : ''}</span></div>`;
+      const has = Number.isFinite(v);
+      const colour = has ? ramp()[v - 1] : (M().noData ?? '#e6e6e6');
+      const tip = Number.isFinite(rk) ? `Rank ${fmt(rk)} of ${fmt(ds.total)} (1 = most deprived)` : '';
+      html += `<div class="panel-measure${cur ? ' current' : ''}"${tip ? ` data-tip="${esc(tip)}"` : ''}>` +
+        `<span class="block${has ? '' : ' none'}" style="background:${esc(colour)};color:${has ? textOn(colour) : 'inherit'}">${has ? v : '–'}</span>` +
+        `<span class="name">${esc(m.label)}</span></div>`;
     }
     const pr = ds.parentRanks?.rows.get(g('pcode'));
     const m0 = state.active?.dataset === ds ? state.active.measure : ds.measures[0];
@@ -210,6 +196,10 @@ function closeArea() {
 }
 document.querySelector('[data-close="panel"]').addEventListener('click', () => { closeArea(); go(''); });
 
+// ── Foldable panels ────────────────────────────────────────
+// On a small screen the legend starts folded so it does not cover the controls.
+if (matchMedia('(max-width: 900px), (max-height: 780px)').matches) $('furniture').open = false;
+
 // ── Small problems ─────────────────────────────────────────
 function showProblems() {
   const box = $('problems');
@@ -217,6 +207,24 @@ function showProblems() {
   box.hidden = false;
   box.innerHTML = `<summary>${state.problems.length} ${state.problems.length === 1 ? 'problem' : 'problems'}</summary>` +
     `<ul>${state.problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>`;
+}
+
+// ── Moving to an area ──────────────────────────────────────
+// Centroids (one point per area) are a separate small file, loaded only when a link or Back/Forward
+// opens an area, never on an ordinary visit.
+const centroids = {};
+async function flyToArea(code) {
+  const a = Object.values(CONFIG.areas).find((x) => x.centroids);
+  if (!a?.centroids) return;
+  try {
+    if (!centroids[a.centroids]) {
+      const { rows } = await loadCSV(a.centroids, 'area centroids');
+      centroids[a.centroids] = Object.fromEntries(rows.map((r) => [r.code, [Number(r.lon), Number(r.lat)]]));
+    }
+  } catch (e) { problem(`Could not read the area centroids (${e.message})`); showProblems(); return; }
+  const c = centroids[a.centroids][code];
+  if (!c || (map.getZoom() >= 9 && map.getBounds().contains(c))) return;   // unknown area, or already in view and zoomed in
+  map.flyTo({ center: c, zoom: Math.max(map.getZoom(), 11), essential: true });
 }
 
 // ── Addresses and the Back button ──────────────────────────
@@ -235,7 +243,7 @@ function route() {
   const code = decodeURIComponent(location.hash.slice(1));
   restoring = true;
   try {
-    if (isAreaCode(code)) openArea(code); else closeArea();
+    if (isAreaCode(code)) { openArea(code); flyToArea(code); } else closeArea();
   } finally {
     restoring = false;
   }

@@ -21,6 +21,7 @@ export default {
       file: 'data/tiles/lsoa-2021-ew.pmtiles',
       layer: 'areas',                  // layer name inside the file
       code: 'code',                    // the property holding the ONS area code
+      centroids: 'data/lsoa-2021-ew-centroids.csv',   // one point per area, to move to an area opened by a link
       label: 'LSOA (2021), England and Wales',
     },
   },
