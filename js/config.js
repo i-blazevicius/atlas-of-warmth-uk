@@ -124,18 +124,22 @@ export default {
     },
     {
       id: 'fuelpoverty', label: 'Fuel poverty',
-      file: 'data/fuel-poverty-england.csv',        // tools/build_fuel_poverty.py
+      file: 'data/fuel-poverty.csv',        // tools/build_fuel_poverty.py
       key: 'code', name: 'name', nation: 'nation',
       parent: { code: 'la_code', name: 'la_name' },
       opacity: 0.8,
-      // Measures that are a rate, not a decile: coloured in classes. `breaks` are the class edges in the measure's unit.
-      classes: { breaks: [8, 10, 12, 14, 16], colours: ['#ffffcc', '#c7e9b4', '#7fcdbb', '#41b6c4', '#2c7fb8', '#253494'], unit: '%' },
-      note: 'England only, for now. Share of households in fuel poverty: low income and a home that is expensive to heat (the Low Income Low Energy Efficiency measure, 2024). Scotland and Wales define it differently, so their figures would not be comparable.',
-      sources: { E: 'Sub-regional fuel poverty in England, 2026 report (2024 data), Department for Energy Security and Net Zero. Modelled from the English Housing Survey.' },
+      // Measures that are a rate, not a decile: coloured in classes. `breaks` are the class edges in the measure's unit, one list per
+      // nation (the same colours, but each nation's own edges: the definitions differ, so areas are only compared within a nation).
+      classes: { breaks: { E: [8, 10, 12, 14, 16], S: [26, 29, 32, 35, 38] }, colours: ['#ffffcc', '#c7e9b4', '#7fcdbb', '#41b6c4', '#2c7fb8', '#253494'], unit: '%' },
+      note: 'Share of households in fuel poverty. The definitions differ (England: low income and an energy-inefficient home; Scotland: fuel costs above 10% of income, after housing costs), so each nation has its own class edges: compare areas within a nation only. Wales and Northern Ireland publish no figures for small areas.',
+      sources: {
+        E: 'Sub-regional fuel poverty in England, 2026 report (2024 data), Department for Energy Security and Net Zero. Modelled from the English Housing Survey.',
+        S: 'Scottish House Condition Survey: Local Authority Analysis 2022-2024, Scottish Government. Survey estimates; rounded to whole per cent.',
+      },
       licence: 'Open Government Licence v3.0.',
       measures: [
         { id: 'lad', label: 'Local authorities', kind: 'rate', value: 'lad rate', rank: null, areas: ['lad'],
-          counts: ['fuel poor households', 'households'], names: { E: 'Households in fuel poverty' } },
+          counts: ['fuel poor households', 'households'], names: { E: 'Households in fuel poverty', S: 'Households in fuel poverty' } },
         { id: 'lsoa', label: 'LSOAs (finer, less reliable)', kind: 'rate', value: 'lsoa rate', rank: null, areas: ['lsoa'],
           counts: ['fuel poor households', 'households'], names: { E: 'Households in fuel poverty' },
           caution: 'LSOA figures are modelled estimates: use them to spot general patterns and very high or low areas, not to rank or compare individual LSOAs.' },
@@ -144,7 +148,7 @@ export default {
   ],
 
   // Credits for the boundaries, shown with the base map's in the map's attribution (bottom right).
-  attribution: 'Boundaries: Office for National Statistics, Scottish Government, NISRA; Open Government Licence v3.0. Fuel poverty: DESNZ; Open Government Licence v3.0. Contains OS data © Crown copyright and database right 2026.',
+  attribution: 'Boundaries: Office for National Statistics, Scottish Government, NISRA; Open Government Licence v3.0. Fuel poverty: DESNZ, Scottish Government; Open Government Licence v3.0. Contains OS data © Crown copyright and database right 2026.',
 
   // Starting view: the whole UK. [longitude, latitude], zoom.
   view: {

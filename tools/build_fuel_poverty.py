@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""England's sub-regional fuel poverty (2024 data, DESNZ, published May 2026) -> data/fuel-poverty-england.csv
+"""Fuel poverty -> data/fuel-poverty.csv: England (2024 data, DESNZ, published May 2026) and Scotland (SHCS 2022-24)
 
   python3 tools/build_fuel_poverty.py
 
@@ -10,6 +10,7 @@ together, keyed by area code:
 `lad rate` is filled on local-authority rows and `lsoa rate` on LSOA rows (the page picks which one to draw).
 Rates are the % of households in fuel poverty (Low Income Low Energy Efficiency metric). The LSOA figures are
 modelled estimates DESNZ says should only be used to spot general trends, not to rank or compare LSOAs."""
+import os, re
 import pandas as pd
 
 SRC = 'source/fuel-poverty-sub-regional-2026-2024-data-tables.xlsx'
@@ -49,8 +50,28 @@ ls = pd.DataFrame({
     'fuel poor households': pd.to_numeric(t4['Number of households in fuel poverty']).astype(int).values,
     'households': pd.to_numeric(t4['Number of households']).astype(int).values,
 })
-out = pd.concat([la, ls], ignore_index=True)
+# Scotland: Scottish House Condition Survey local authority tables 2022-24, Table 21 (% of households in fuel poverty,
+# 10%-of-income definition: not comparable with England's measure). Council names are matched to the May 2026 codes.
+# The tables round counts to thousands and give no household totals, so only the rate is kept.
+sc = []
+SCOT = 'source/shcs-local-authority-tables-2022-2024.ods'
+if os.path.exists(SCOT):
+    import geopandas as gpd
+    lads = gpd.read_file('source/LAD_May2026_UK_BGC.gpkg', ignore_geometry=True)
+    lads = lads[lads.LAD26CD.str.startswith('S12')]
+    norm = lambda n: re.sub(r'\s+', ' ', str(n)).strip().lower().replace('&', 'and')
+    fix = {'edinburgh, city of': 'city of edinburgh'}
+    byname = {norm(n): (c, n) for c, n in zip(lads.LAD26CD, lads.LAD26NM)}
+    t = pd.read_excel(SCOT, sheet_name='Table_21', header=None, engine='odf').iloc[4:36, [0, 1]]
+    for name, v in zip(t[0], t[1]):
+        v = str(v).strip(); rate = float(v[:-1]) if v.endswith('%') else float(v) * 100     # one cell is stored as 0.33
+        code, nm = byname.pop(fix.get(norm(name), norm(name)))
+        sc.append({'code': code, 'name': nm, 'nation': 'S', 'la_code': '', 'la_name': '', 'lad rate': round(rate, 2),
+                   'lsoa rate': '', 'fuel poor households': '', 'households': ''})
+    assert not byname and len(sc) == 32, byname
+    print(f'{len(sc)} Scottish councils, rate {min(r["lad rate"] for r in sc)}-{max(r["lad rate"] for r in sc)}')
+out = pd.concat([la, ls, pd.DataFrame(sc)], ignore_index=True)
 assert out.code.is_unique
-out.to_csv('data/fuel-poverty-england.csv', index=False)
-print(f'{len(la)} local authorities, {len(ls)} LSOAs -> data/fuel-poverty-england.csv')
+out.to_csv('data/fuel-poverty.csv', index=False)
+print(f'{len(la)} local authorities, {len(ls)} LSOAs -> data/fuel-poverty.csv')
 print('LA rate range', la['lad rate'].min(), la['lad rate'].max(), '| LSOA', ls['lsoa rate'].min(), ls['lsoa rate'].max())

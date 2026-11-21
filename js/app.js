@@ -214,7 +214,12 @@ function applyData(ds) {
     const a = areaSetOf(code);
     if (!a) { const n = String(r[ds.col.nation] ?? '?'); ds.unmapped[n] = (ds.unmapped[n] ?? 0) + 1; continue; }
     const st = {};
-    for (const m of ds.measures) { const v = Number(r[ds.col[`v:${m.id}`]]); if (r[ds.col[`v:${m.id}`]] !== '' && Number.isFinite(v)) st[stateKey(ds, m)] = v; }
+    for (const m of ds.measures) {
+      const v = Number(r[ds.col[`v:${m.id}`]]);
+      if (r[ds.col[`v:${m.id}`]] === '' || !Number.isFinite(v)) continue;
+      st[stateKey(ds, m)] = v;
+      if (m.kind === 'rate') st[`${stateKey(ds, m)}:class`] = classIndex(ds, String(r[ds.col.nation] ?? '').trim(), v);
+    }
     map.setFeatureState({ source: `areas-${a.id}`, sourceLayer: a.layer, id: code }, st);
   }
   for (const [n, count] of Object.entries(ds.unmapped)) {
@@ -224,19 +229,24 @@ function applyData(ds) {
   console.info(`feature state set for ${ds.byCode.size} areas in ${state.timing.featureState} ms`);
 }
 
-// A rate measure is coloured in classes (ds.classes.breaks / colours); a decile measure by its decile.
-function classColour(ds, v) {
-  const { breaks, colours } = ds.classes;
+// A rate measure is coloured in classes: the same colours for every nation, each nation with its own class edges
+// (ds.classes.breaks is a list, or one list per nation code). The class number goes into feature state, so one
+// paint expression serves every nation.
+const breaksFor = (ds, nation) => (Array.isArray(ds.classes.breaks) ? ds.classes.breaks : ds.classes.breaks[nation]);
+function classIndex(ds, nation, v) {
+  const br = breaksFor(ds, nation);
+  if (!br) return -1;
   let i = 0;
-  while (i < breaks.length && v >= breaks[i]) i++;
-  return colours[i];
+  while (i < br.length && v >= br[i]) i++;
+  return i;
 }
+const classColour = (ds, nation, v) => ds.classes.colours[classIndex(ds, nation, v)];
 function fillExpression(ds, m) {
   if (m.kind === 'rate') {
-    const { breaks, colours } = ds.classes;
-    const step = ['step', ['coalesce', ['feature-state', stateKey(ds, m)], -1], NO_DATA, 0, colours[0]];
-    breaks.forEach((b, i) => step.push(b, colours[i + 1]));
-    return step;
+    const match = ['match', ['coalesce', ['feature-state', `${stateKey(ds, m)}:class`], -1]];
+    ds.classes.colours.forEach((c, i) => match.push(i, c));
+    match.push(NO_DATA);
+    return match;
   }
   const match = ['match', ['coalesce', ['feature-state', stateKey(ds, m)], 0]];
   RAMP.forEach((c, i) => match.push(i + 1, c));
@@ -363,10 +373,11 @@ function renderLegend() {
   const cov = coverage(ds, measure);
   let rows;
   if (measure.kind === 'rate') {
-    const { breaks, colours, unit = '' } = ds.classes;
-    const names = colours.map((_, i) => (i === 0 ? `< ${breaks[0]}${unit}` : i === breaks.length ? `> ${breaks[i - 1]}${unit}`
-      : `${breaks[i - 1]}–${breaks[i]}${unit}`));
-    rows = colours.map((c, i) => `<div class="legend-row"><i style="background:${esc(c)}"></i>${names[i]}</div>`).join('');
+    const { colours, unit = '' } = ds.classes;
+    const nations = Object.keys(NATIONS).filter((n) => measure.names?.[n] && breaksFor(ds, n));
+    const edge = (br, i) => (i === 0 ? `< ${br[0]}${unit}` : i === br.length ? `> ${br[i - 1]}${unit}` : `${br[i - 1]}–${br[i]}${unit}`);
+    rows = (nations.length > 1 ? `<div class="legend-row legend-head"><i></i>${nations.map((n) => NATIONS[n]).join(' · ')}</div>` : '') +
+      colours.map((c, i) => `<div class="legend-row"><i style="background:${esc(c)}"></i>${nations.map((n) => edge(breaksFor(ds, n), i)).join(' · ')}</div>`).join('');
   } else {
     rows = RAMP.map((c, i) => `<div class="legend-row"><i style="background:${c}"></i>${label(i + 1)}</div>`).join('');
   }
@@ -400,7 +411,7 @@ function openArea(code) {
       const has = raw !== '' && Number.isFinite(v);
       const rate = m.kind === 'rate';
       const cur = state.active?.measure === m && state.active?.dataset === ds;
-      const colour = !has ? NO_DATA : rate ? classColour(ds, v) : RAMP[v - 1];
+      const colour = !has ? NO_DATA : rate ? classColour(ds, nation, v) : RAMP[v - 1];
       const total = ds.totals?.[nation];
       let tip = g(`r:${m.id}`) !== '' && Number.isFinite(rk)
         ? `Rank ${fmt(rk)}${total ? ` of ${fmt(total)} in ${NATIONS[nation] ?? nation}` : ''} (1 = most deprived)` : '';

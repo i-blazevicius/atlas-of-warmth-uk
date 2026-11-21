@@ -120,6 +120,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .furniture { display: block; }
 .legend-title { margin: 0 0 6px; font-family: var(--font-label); font-weight: var(--label-weight); font-size: var(--label-size); text-transform: var(--label-case); letter-spacing: var(--label-tracking); color: var(--ink-dim); max-width: 220px; }
 .legend-row { display: flex; align-items: center; gap: 8px; height: 16px; font-size: 12px; }
+.legend-head { color: var(--ink-faint); }
+.legend-head i { visibility: hidden; }
 .legend-row i { width: 22px; height: 12px; border: 1px solid var(--panel-line); flex: none; }
 /* North arrow and scale bar: the same height and the same 1px line */
 :root { --furniture-h: 20px; }

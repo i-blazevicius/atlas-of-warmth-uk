@@ -55,14 +55,14 @@ map colours and the 10-class colour ramp (`map`). Settings it leaves out go back
 - **Links**: `#E01033653` opens the area and moves the map there, using the one-point-per-area files
   (`data/*-centroids.csv`, `tools/build_centroids.py`), read only when a link or Back/Forward opens an area.
 
-### Fuel poverty (England)
+### Fuel poverty (England and Scotland)
 
-`data/fuel-poverty-england.csv` is built by `python3 tools/build_fuel_poverty.py` from DESNZ's *Sub-regional fuel poverty
+`data/fuel-poverty.csv` is built by `python3 tools/build_fuel_poverty.py` from DESNZ's *Sub-regional fuel poverty
 in England, 2026 report (2024 data)* detailed tables (put the .xlsx in `source/`; Open Government Licence v3.0). It has two
 views: **local authorities** (the reliable one, drawn from `data/tiles/lad-2026.pmtiles`, an optional area set that is only
 drawn for measures listing it in `areas`) and **LSOAs** (finer, but modelled: use for general patterns, not for ranking
 individual LSOAs). Rates are coloured in classes (`classes` in `js/config.js`), not deciles. The figure is England's Low Income
-Low Energy Efficiency measure; Scotland and Wales use a different (10%-of-income) definition, so they are not mixed in.
+Low Energy Efficiency measure. Scotland (32 councils, SHCS 2022–24, put in `source/shcs-local-authority-tables-2022-2024.ods`) uses the 10%-of-income definition, so it has the same colours but its own class edges (`classes.breaks` per nation): compare areas within a nation only. Wales publishes national figures only and Northern Ireland none below NI level, so neither is mapped.
 
 
 An area has its own address (the map moves to it), so Back and Forward work and any area can be bookmarked or shared:
@@ -92,7 +92,7 @@ Columns in datasets are matched by **header text** (exact, then "starts with"), 
 - `js/head.js` – shared start of every page: fonts, the last-used look, stylesheets, the error box
 - `js/app.js` – map behaviour, addresses, panels
 - `js/core.js` – errors, small problems, reading CSV files
-- `tools/build_tiles.py` – boundaries → PMTiles; `tools/build_centroids.py` – boundaries → one point per area; `tools/build_deprivation.py` – the four nations' deprivation downloads → site CSVs; `tools/build_indicators.py` – their underlying indicators → `data/indicators/`; `tools/build_fuel_poverty.py` – DESNZ fuel poverty tables → `data/fuel-poverty-england.csv`; `tools/serve.py` – local test server with byte-range support
+- `tools/build_tiles.py` – boundaries → PMTiles; `tools/build_centroids.py` – boundaries → one point per area; `tools/build_deprivation.py` – the four nations' deprivation downloads → site CSVs; `tools/build_indicators.py` – their underlying indicators → `data/indicators/`; `tools/build_fuel_poverty.py` – DESNZ fuel poverty tables and the Scottish House Condition Survey council tables → `data/fuel-poverty.csv`; `tools/serve.py` – local test server with byte-range support
 - `js/styles.js` – the looks
 - `js/config.js` – settings
 - `css/style.css` – styling (built-in values are the QGIS look)
