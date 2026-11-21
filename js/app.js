@@ -48,12 +48,11 @@ maplibregl.addProtocol('pmtiles', protocol.tile);
 const sources = {}, layers = [{ id: 'background', type: 'background', paint: { 'background-color': M.background ?? '#ffffff' } }];
 for (const a of AREA_SETS) {
   sources[`areas-${a.id}`] = { type: 'vector', url: `pmtiles://${new URL(a.file, location.href).href}`, promoteId: { [a.layer]: a.code } };
-  layers.push(
-    { id: `fill-${a.id}`, type: 'fill', source: `areas-${a.id}`, 'source-layer': a.layer,
-      paint: { 'fill-color': NO_DATA, 'fill-opacity': 0.8, 'fill-antialias': false } },
-    { id: `line-${a.id}`, type: 'line', source: `areas-${a.id}`, 'source-layer': a.layer,
-      paint: { 'line-color': M.areaLine ?? '#9a9a9a', 'line-width': 0.4, 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0, 11, 0.7] } },
-  );
+  const layout = a.optional ? { visibility: 'none' } : {};          // optional sets wait until a measure asks for them
+  layers.push({ id: `fill-${a.id}`, type: 'fill', source: `areas-${a.id}`, 'source-layer': a.layer, layout,
+    paint: { 'fill-color': NO_DATA, 'fill-opacity': 0.8, 'fill-antialias': false } });
+  if (a.lines !== false) layers.push({ id: `line-${a.id}`, type: 'line', source: `areas-${a.id}`, 'source-layer': a.layer, layout,
+    paint: { 'line-color': M.areaLine ?? '#9a9a9a', 'line-width': 0.4, 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0, 11, 0.7] } });
 }
 // Administrative outlines: a white casing, then the line, for each level (local authorities lowest).
 const OUTLINES = CONFIG.outlines?.layers ?? [];
@@ -81,6 +80,7 @@ function applyOutlines() {
 }
 for (const a of AREA_SETS) {
   layers.push({ id: `selected-${a.id}`, type: 'line', source: `areas-${a.id}`, 'source-layer': a.layer, filter: ['==', ['get', a.code], ''],
+    layout: a.optional ? { visibility: 'none' } : {},
     paint: { 'line-color': M.selected ?? '#111111', 'line-width': 2.5 } });
 }
 const FILLS = AREA_SETS.map((a) => `fill-${a.id}`);
@@ -177,7 +177,11 @@ function applyUnderlay() {
 async function loadDataset(cfg) {
   const { rows, headers } = await loadCSV(cfg.file, cfg.label);
   const wanted = { key: cfg.key, name: cfg.name, nation: cfg.nation, pcode: cfg.parent?.code, pname: cfg.parent?.name };
-  for (const m of cfg.measures) { wanted[`v:${m.id}`] = m.value ?? `${m.id} decile`; wanted[`r:${m.id}`] = m.rank ?? `${m.id} rank`; }
+  for (const m of cfg.measures) {
+    wanted[`v:${m.id}`] = m.value ?? `${m.id} decile`;
+    wanted[`r:${m.id}`] = m.rank === null ? null : m.rank ?? `${m.id} rank`;         // rank: null = this measure has no rank column
+    for (const c of m.counts ?? []) wanted[`c:${c}`] = c;
+  }
   const col = resolveColumns(headers, Object.fromEntries(Object.entries(wanted).filter(([, v]) => v)));
   if (!col.key) throw fail('E4', `${cfg.label}: no "${cfg.key}" column, so the rows cannot be matched to areas. Check the header row of ${cfg.file}, or key in js/config.js.`);
   for (const [k, v] of Object.entries(wanted)) if (v && !col[k]) problem(`${cfg.label}: column "${v}" not found (was it renamed?)`);
@@ -220,7 +224,20 @@ function applyData(ds) {
   console.info(`feature state set for ${ds.byCode.size} areas in ${state.timing.featureState} ms`);
 }
 
+// A rate measure is coloured in classes (ds.classes.breaks / colours); a decile measure by its decile.
+function classColour(ds, v) {
+  const { breaks, colours } = ds.classes;
+  let i = 0;
+  while (i < breaks.length && v >= breaks[i]) i++;
+  return colours[i];
+}
 function fillExpression(ds, m) {
+  if (m.kind === 'rate') {
+    const { breaks, colours } = ds.classes;
+    const step = ['step', ['coalesce', ['feature-state', stateKey(ds, m)], -1], NO_DATA, 0, colours[0]];
+    breaks.forEach((b, i) => step.push(b, colours[i + 1]));
+    return step;
+  }
   const match = ['match', ['coalesce', ['feature-state', stateKey(ds, m)], 0]];
   RAMP.forEach((c, i) => match.push(i + 1, c));
   match.push(NO_DATA);
@@ -228,6 +245,11 @@ function fillExpression(ds, m) {
 }
 function paintMap() {
   const { dataset: ds, measure } = state.active ?? {};
+  // Which area sets are drawn: the measure's own list, else every set that is not optional.
+  for (const a of AREA_SETS) {
+    const show = measure?.areas ? measure.areas.includes(a.id) : !a.optional;
+    for (const id of [`fill-${a.id}`, `line-${a.id}`, `selected-${a.id}`]) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', show ? 'visible' : 'none');
+  }
   for (const id of FILLS) {
     map.setPaintProperty(id, 'fill-color', ds ? fillExpression(ds, measure) : NO_DATA);
     // A dataset switched off is made fully transparent (not hidden), so areas can still be clicked.
@@ -240,14 +262,14 @@ function setActive(ds, measure) {
   paintMap();
   renderLegend();
   if (state.selected) openArea(state.selected);
-  for (const input of document.querySelectorAll(`input[name="measure-${ds.id}"]`)) input.checked = input.value === measure.id;
+  for (const input of document.querySelectorAll('input[data-measure]')) input.checked = input.dataset.ds === ds.id && input.value === measure.id;
 }
 
 // ── Control panel ──────────────────────────────────────────
 // Nations that have a measure, as a short note ("Wales, Scotland") when not all of them do.
 function coverage(ds, m) {
   if (!m.names) return '';
-  const have = Object.keys(NATIONS).filter((n) => m.names[n] && ds.totals?.[n]);
+  const have = Object.keys(NATIONS).filter((n) => m.names[n] && (!ds.totals || ds.totals[n]));
   return have.length && have.length < Object.keys(NATIONS).length ? have.map((n) => NATIONS[n]).join(', ') : '';
 }
 function slider(value, onInput, label) {
@@ -316,12 +338,14 @@ function buildDatasetControls() {
     list.setAttribute('role', 'radiogroup');
     for (const m of ds.measures) {
       const label = document.createElement('label');
-      const input = Object.assign(document.createElement('input'), { type: 'radio', name: `measure-${ds.id}`, value: m.id });
+      const input = Object.assign(document.createElement('input'), { type: 'radio', name: 'measure', value: m.id });
+      input.dataset.ds = ds.id; input.dataset.measure = '1';
       input.addEventListener('change', () => setActive(ds, m));
       const text = document.createElement('span');
       text.textContent = m.label;
       const cov = coverage(ds, m);
-      if (cov) text.append(Object.assign(document.createElement('small'), { className: 'coverage', textContent: ` ${cov}` }));
+      const covs = new Set(ds.measures.map((x) => coverage(ds, x)));      // shown only where measures differ
+      if (cov && covs.size > 1) text.append(Object.assign(document.createElement('small'), { className: 'coverage', textContent: ` ${cov}` }));
       label.append(input, text);
       list.append(label);
     }
@@ -337,8 +361,16 @@ function renderLegend() {
   $('furniture').hidden = false;
   const label = (i) => (i === 1 ? '1 · most deprived 10%' : i === 10 ? '10 · least deprived 10%' : String(i));
   const cov = coverage(ds, measure);
-  $('legend').innerHTML = `<p class="legend-title">${esc(measure.label)}<br>${esc(ds.label)}${cov ? ` · ${esc(cov)} only` : ''}</p>` +
-    RAMP.map((c, i) => `<div class="legend-row"><i style="background:${c}"></i>${label(i + 1)}</div>`).join('') +
+  let rows;
+  if (measure.kind === 'rate') {
+    const { breaks, colours, unit = '' } = ds.classes;
+    const names = colours.map((_, i) => (i === 0 ? `< ${breaks[0]}${unit}` : i === breaks.length ? `> ${breaks[i - 1]}${unit}`
+      : `${breaks[i - 1]}–${breaks[i]}${unit}`));
+    rows = colours.map((c, i) => `<div class="legend-row"><i style="background:${esc(c)}"></i>${names[i]}</div>`).join('');
+  } else {
+    rows = RAMP.map((c, i) => `<div class="legend-row"><i style="background:${c}"></i>${label(i + 1)}</div>`).join('');
+  }
+  $('legend').innerHTML = `<p class="legend-title">${esc(measure.label)}<br>${esc(ds.label)}${cov ? ` · ${esc(cov)} only` : ''}</p>` + rows +
     `<div class="legend-row"><i style="background:${esc(NO_DATA)}"></i>No data</div>` +
     (ds.note ? `<p class="legend-note">${esc(ds.note)}</p>` : '');
 }
@@ -363,21 +395,28 @@ function openArea(code) {
     html += `<p class="control-label">${esc(ds.label)}</p>`;
     for (const m of ds.measures) {
       if (m.names && !m.names[nation]) continue;            // this nation has no such measure
+      if (m.areas && !m.areas.includes(areaSetOf(code)?.id)) continue;   // measure is for another kind of area
       const raw = g(`v:${m.id}`), v = Number(raw), rk = Number(g(`r:${m.id}`));
       const has = raw !== '' && Number.isFinite(v);
+      const rate = m.kind === 'rate';
       const cur = state.active?.measure === m && state.active?.dataset === ds;
-      const colour = has ? RAMP[v - 1] : NO_DATA;
+      const colour = !has ? NO_DATA : rate ? classColour(ds, v) : RAMP[v - 1];
       const total = ds.totals?.[nation];
-      const tip = g(`r:${m.id}`) !== '' && Number.isFinite(rk)
+      let tip = g(`r:${m.id}`) !== '' && Number.isFinite(rk)
         ? `Rank ${fmt(rk)}${total ? ` of ${fmt(total)} in ${NATIONS[nation] ?? nation}` : ''} (1 = most deprived)` : '';
+      if (rate && has) {
+        const [a, b] = (m.counts ?? []).map((c) => Number(g(`c:${c}`)));
+        tip = `${v.toFixed(1)}%${Number.isFinite(a) && Number.isFinite(b) && b ? ` of households: ${fmt(a)} of ${fmt(b)}` : ''}`;
+      }
       const key = `${ds.id}:${m.id}`;
       const expandable = !!m.indicators?.includes(nation) && !!ds.indicatorsDir;
       const open = expandable && state.expanded.has(key);
       html += `<div class="panel-measure${cur ? ' current' : ''}${expandable ? ' expandable' : ''}${open ? ' open' : ''}"${tip ? ` data-tip="${esc(tip)}"` : ''}` +
         (expandable ? ` data-key="${esc(key)}" data-ds="${esc(ds.id)}" data-m="${esc(m.id)}" data-nation="${esc(nation)}" role="button" tabindex="0" aria-expanded="${open}"` : '') + '>' +
-        `<span class="block${has ? '' : ' none'}" style="background:${esc(colour)};color:${has ? textOn(colour) : 'inherit'}">${has ? v : '–'}</span>` +
+        `<span class="block${has ? '' : ' none'}${rate ? ' wide' : ''}" style="background:${esc(colour)};color:${has ? textOn(colour) : 'inherit'}">${has ? (rate ? `${Math.round(v)}%` : v) : '–'}</span>` +
         `<span class="name">${esc(m.names?.[nation] ?? m.label)}</span>${expandable ? '<span class="caret" aria-hidden="true"></span>' : ''}</div>` +
-        (open ? '<div class="indicators"></div>' : '');
+        (open ? '<div class="indicators"></div>' : '') +
+        (m.caution && cur ? `<p class="panel-note">${esc(m.caution)}</p>` : '');
     }
     const pr = ds.parentRanks?.rows.get(g('pcode'));
     const m0 = state.active?.dataset === ds ? state.active.measure : ds.measures[0];

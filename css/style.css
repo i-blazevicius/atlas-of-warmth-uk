@@ -133,6 +133,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
   flex: none; width: 36px; height: 30px; display: grid; place-items: center; border: 1px solid var(--panel-line);
   font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
+.panel-measure .block.wide { width: 46px; font-size: 14px; }
 .panel-measure .block.none { font-weight: 400; color: var(--ink-faint); }
 .panel-measure.current .block { outline: 2px solid var(--ink); outline-offset: 1px; }
 .panel-measure.current .name { font-weight: 600; }

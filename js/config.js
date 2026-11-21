@@ -48,6 +48,16 @@ export default {
       centroids: 'data/soa-2001-n-centroids.csv',
       label: 'Super Output Areas (2001), Northern Ireland',   // built from the 2001 output areas: tools/build_ni_soa.py
     },
+    // An optional area set is drawn only for a measure that lists it in its `areas` (the others are drawn for every measure
+    // without an `areas` list). `lines: false` leaves out its own boundary lines (the outlines below draw local authorities).
+    lad: {
+      file: 'data/tiles/lad-2026.pmtiles',
+      layer: 'areas', code: 'code',
+      codes: '^(E0[6-9]|W06|S12|N09)',
+      centroids: 'data/lad-2026-centroids.csv',
+      label: 'Local authorities (May 2026)',
+      optional: true, lines: false,
+    },
   },
 
   // Administrative outlines over the data (tools/build_outlines.py): only borders between neighbouring areas, no coast.
@@ -112,10 +122,29 @@ export default {
       indicatorsDir: 'data/indicators/',
       parentRanks: { file: 'data/deprivation-england-lad.csv', key: 'la_code', label: 'local authorities in England' },
     },
+    {
+      id: 'fuelpoverty', label: 'Fuel poverty',
+      file: 'data/fuel-poverty-england.csv',        // tools/build_fuel_poverty.py
+      key: 'code', name: 'name', nation: 'nation',
+      parent: { code: 'la_code', name: 'la_name' },
+      opacity: 0.8,
+      // Measures that are a rate, not a decile: coloured in classes. `breaks` are the class edges in the measure's unit.
+      classes: { breaks: [8, 10, 12, 14, 16], colours: ['#ffffcc', '#c7e9b4', '#7fcdbb', '#41b6c4', '#2c7fb8', '#253494'], unit: '%' },
+      note: 'England only, for now. Share of households in fuel poverty: low income and a home that is expensive to heat (the Low Income Low Energy Efficiency measure, 2024). Scotland and Wales define it differently, so their figures would not be comparable.',
+      sources: { E: 'Sub-regional fuel poverty in England, 2026 report (2024 data), Department for Energy Security and Net Zero. Modelled from the English Housing Survey.' },
+      licence: 'Open Government Licence v3.0.',
+      measures: [
+        { id: 'lad', label: 'Local authorities', kind: 'rate', value: 'lad rate', rank: null, areas: ['lad'],
+          counts: ['fuel poor households', 'households'], names: { E: 'Households in fuel poverty' } },
+        { id: 'lsoa', label: 'LSOAs (finer, less reliable)', kind: 'rate', value: 'lsoa rate', rank: null, areas: ['lsoa'],
+          counts: ['fuel poor households', 'households'], names: { E: 'Households in fuel poverty' },
+          caution: 'LSOA figures are modelled estimates: use them to spot general patterns and very high or low areas, not to rank or compare individual LSOAs.' },
+      ],
+    },
   ],
 
   // Credits for the boundaries, shown with the base map's in the map's attribution (bottom right).
-  attribution: 'Boundaries: Office for National Statistics, Scottish Government, NISRA; Open Government Licence v3.0. Contains OS data © Crown copyright and database right 2026.',
+  attribution: 'Boundaries: Office for National Statistics, Scottish Government, NISRA; Open Government Licence v3.0. Fuel poverty: DESNZ; Open Government Licence v3.0. Contains OS data © Crown copyright and database right 2026.',
 
   // Starting view: the whole UK. [longitude, latitude], zoom.
   view: {
