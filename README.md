@@ -92,7 +92,7 @@ Columns in datasets are matched by **header text** (exact, then "starts with"), 
 - `js/head.js` – shared start of every page: fonts, the last-used look, stylesheets, the error box
 - `js/app.js` – map behaviour, addresses, panels
 - `js/core.js` – errors, small problems, reading CSV files
-- `tools/build_tiles.py` – boundaries → PMTiles; `tools/build_centroids.py` – boundaries → one point per area; `tools/build_deprivation.py` – the four nations' deprivation downloads → site CSVs; `tools/build_indicators.py` – their underlying indicators → `data/indicators/`; `tools/build_fuel_poverty.py` – DESNZ fuel poverty tables and the Scottish House Condition Survey council tables → `data/fuel-poverty.csv`; `tools/serve.py` – local test server with byte-range support
+- `tools/build_tiles.py` – boundaries → PMTiles; `tools/build_centroids.py` – boundaries → one point per area; `tools/build_deprivation.py` – the four nations' deprivation downloads → site CSVs; `tools/build_indicators.py` – their underlying indicators → `data/indicators/`; `tools/build_epc.py` – MHCLG EPC live tables → `data/epc.csv`; `tools/build_fuel_poverty.py` – DESNZ fuel poverty tables and the Scottish House Condition Survey council tables → `data/fuel-poverty.csv`; `tools/serve.py` – local test server with byte-range support
 - `js/styles.js` – the looks
 - `js/config.js` – settings
 - `css/style.css` – styling (built-in values are the QGIS look)

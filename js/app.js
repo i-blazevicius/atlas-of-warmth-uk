@@ -218,7 +218,7 @@ function applyData(ds) {
       const v = Number(r[ds.col[`v:${m.id}`]]);
       if (r[ds.col[`v:${m.id}`]] === '' || !Number.isFinite(v)) continue;
       st[stateKey(ds, m)] = v;
-      if (m.kind === 'rate') st[`${stateKey(ds, m)}:class`] = classIndex(ds, String(r[ds.col.nation] ?? '').trim(), v);
+      if (m.kind === 'rate') st[`${stateKey(ds, m)}:class`] = classIndex(classesOf(ds, m), String(r[ds.col.nation] ?? '').trim(), v);
     }
     map.setFeatureState({ source: `areas-${a.id}`, sourceLayer: a.layer, id: code }, st);
   }
@@ -229,22 +229,26 @@ function applyData(ds) {
   console.info(`feature state set for ${ds.byCode.size} areas in ${state.timing.featureState} ms`);
 }
 
-// A rate measure is coloured in classes: the same colours for every nation, each nation with its own class edges
-// (ds.classes.breaks is a list, or one list per nation code). The class number goes into feature state, so one
-// paint expression serves every nation.
-const breaksFor = (ds, nation) => (Array.isArray(ds.classes.breaks) ? ds.classes.breaks : ds.classes.breaks[nation]);
-function classIndex(ds, nation, v) {
-  const br = breaksFor(ds, nation);
+// A "rate" measure (any number shown as a number, not a decile) is coloured in classes. Classes come from the measure
+// (m.classes) or else the dataset (ds.classes): the colours, and `breaks`, the class edges: one list for every nation, or
+// one list per nation code when the definitions differ. The class number goes into feature state, so one paint
+// expression serves every nation.
+const classesOf = (ds, m) => m.classes ?? ds.classes;
+const breaksFor = (cl, nation) => (Array.isArray(cl.breaks) ? cl.breaks : cl.breaks[nation]);
+function classIndex(cl, nation, v) {
+  const br = breaksFor(cl, nation);
   if (!br) return -1;
   let i = 0;
   while (i < br.length && v >= br[i]) i++;
   return i;
 }
-const classColour = (ds, nation, v) => ds.classes.colours[classIndex(ds, nation, v)];
+const classColour = (cl, nation, v) => cl.colours[classIndex(cl, nation, v)];
+// A rate measure's number as shown: its unit and decimals (m.unit, m.decimals), e.g. "34%" or "68".
+const showRate = (cl, m, v) => `${v.toFixed(m.decimals ?? 0)}${m.unit ?? cl.unit ?? ''}`;
 function fillExpression(ds, m) {
   if (m.kind === 'rate') {
     const match = ['match', ['coalesce', ['feature-state', `${stateKey(ds, m)}:class`], -1]];
-    ds.classes.colours.forEach((c, i) => match.push(i, c));
+    classesOf(ds, m).colours.forEach((c, i) => match.push(i, c));
     match.push(NO_DATA);
     return match;
   }
@@ -373,11 +377,12 @@ function renderLegend() {
   const cov = coverage(ds, measure);
   let rows;
   if (measure.kind === 'rate') {
-    const { colours, unit = '' } = ds.classes;
-    const nations = Object.keys(NATIONS).filter((n) => measure.names?.[n] && breaksFor(ds, n));
+    const cl = classesOf(ds, measure), unit = measure.unit ?? cl.unit ?? '';
+    // One column of class edges, or one per nation when the edges differ.
+    const cols = Array.isArray(cl.breaks) ? [{ br: cl.breaks }] : Object.keys(NATIONS).filter((n) => measure.names?.[n] && cl.breaks[n]).map((n) => ({ n, br: cl.breaks[n] }));
     const edge = (br, i) => (i === 0 ? `< ${br[0]}${unit}` : i === br.length ? `> ${br[i - 1]}${unit}` : `${br[i - 1]}–${br[i]}${unit}`);
-    rows = (nations.length > 1 ? `<div class="legend-row legend-head"><i></i>${nations.map((n) => NATIONS[n]).join(' · ')}</div>` : '') +
-      colours.map((c, i) => `<div class="legend-row"><i style="background:${esc(c)}"></i>${nations.map((n) => edge(breaksFor(ds, n), i)).join(' · ')}</div>`).join('');
+    rows = (cols.length > 1 ? `<div class="legend-row legend-head"><i></i>${cols.map((c) => NATIONS[c.n]).join(' · ')}</div>` : '') +
+      cl.colours.map((c, i) => `<div class="legend-row"><i style="background:${esc(c)}"></i>${cols.map((k) => edge(k.br, i)).join(' · ')}</div>`).join('');
   } else {
     rows = RAMP.map((c, i) => `<div class="legend-row"><i style="background:${c}"></i>${label(i + 1)}</div>`).join('');
   }
@@ -411,20 +416,20 @@ function openArea(code) {
       const has = raw !== '' && Number.isFinite(v);
       const rate = m.kind === 'rate';
       const cur = state.active?.measure === m && state.active?.dataset === ds;
-      const colour = !has ? NO_DATA : rate ? classColour(ds, nation, v) : RAMP[v - 1];
+      const colour = !has ? NO_DATA : rate ? classColour(classesOf(ds, m), nation, v) : RAMP[v - 1];
       const total = ds.totals?.[nation];
       let tip = g(`r:${m.id}`) !== '' && Number.isFinite(rk)
         ? `Rank ${fmt(rk)}${total ? ` of ${fmt(total)} in ${NATIONS[nation] ?? nation}` : ''} (1 = most deprived)` : '';
       if (rate && has) {
         const [a, b] = (m.counts ?? []).map((c) => Number(g(`c:${c}`)));
-        tip = `${v.toFixed(1)}%${Number.isFinite(a) && Number.isFinite(b) && b ? ` of households: ${fmt(a)} of ${fmt(b)}` : ''}`;
+        tip = `${v.toFixed(1)}${m.unit ?? classesOf(ds, m).unit ?? ''}${Number.isFinite(a) && Number.isFinite(b) && b ? ` of households: ${fmt(a)} of ${fmt(b)}` : ''}`;
       }
       const key = `${ds.id}:${m.id}`;
       const expandable = !!m.indicators?.includes(nation) && !!ds.indicatorsDir;
       const open = expandable && state.expanded.has(key);
       html += `<div class="panel-measure${cur ? ' current' : ''}${expandable ? ' expandable' : ''}${open ? ' open' : ''}"${tip ? ` data-tip="${esc(tip)}"` : ''}` +
         (expandable ? ` data-key="${esc(key)}" data-ds="${esc(ds.id)}" data-m="${esc(m.id)}" data-nation="${esc(nation)}" role="button" tabindex="0" aria-expanded="${open}"` : '') + '>' +
-        `<span class="block${has ? '' : ' none'}${rate ? ' wide' : ''}" style="background:${esc(colour)};color:${has ? textOn(colour) : 'inherit'}">${has ? (rate ? `${Math.round(v)}%` : v) : '–'}</span>` +
+        `<span class="block${has ? '' : ' none'}${rate ? ' wide' : ''}" style="background:${esc(colour)};color:${has ? textOn(colour) : 'inherit'}">${has ? (rate ? showRate(classesOf(ds, m), m, v) : v) : '–'}</span>` +
         `<span class="name">${esc(m.names?.[nation] ?? m.label)}</span>${expandable ? '<span class="caret" aria-hidden="true"></span>' : ''}</div>` +
         (open ? '<div class="indicators"></div>' : '') +
         (m.caution && cur ? `<p class="panel-note">${esc(m.caution)}</p>` : '');

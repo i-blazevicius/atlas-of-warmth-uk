@@ -145,10 +145,32 @@ export default {
           caution: 'LSOA figures are modelled estimates: use them to spot general patterns and very high or low areas, not to rank or compare individual LSOAs.' },
       ],
     },
+    {
+      id: 'epc', label: 'Energy efficiency (EPC)',
+      file: 'data/epc.csv',                         // tools/build_epc.py
+      key: 'code', name: 'name', nation: 'nation',
+      parent: { code: 'la_code', name: 'la_name' },
+      opacity: 0.8,
+      note: 'Energy performance certificate (EPC) ratings of homes, by LSOA, England and Wales. Only homes with an EPC in the last ten years (sold, let or built) are counted, so some areas are covered thinly and the tables do not say how thinly. Ratings are as at the date of each certificate.',
+      sources: { E: 'Energy performance of new and existing dwellings in England and Wales: annual 2026 (live tables LT_1 to LT_3), Ministry of Housing, Communities and Local Government. EPCs lodged April 2016 to March 2026.',
+                 W: 'Energy performance of new and existing dwellings in England and Wales: annual 2026 (live tables LT_1 to LT_3), Ministry of Housing, Communities and Local Government. EPCs lodged April 2016 to March 2026.' },
+      licence: 'Open Government Licence v3.0.',
+      measures: [
+        { id: 'score', label: 'Median energy rating', kind: 'rate', value: 'epc score', rank: null, areas: ['lsoa'],
+          names: { E: 'Median EPC score (higher = more efficient)', W: 'Median EPC score (higher = more efficient)' },
+          classes: { breaks: [62, 65, 68, 71, 74], colours: ['#ffffe5', '#d9f0a3', '#addd8e', '#78c679', '#31a354', '#006837'] } },
+        { id: 'bandc', label: 'Homes in band C or above', kind: 'rate', value: 'epc band c', rank: null, areas: ['lsoa'], unit: '%',
+          names: { E: 'Homes rated band C or above', W: 'Homes rated band C or above' },
+          classes: { breaks: [30, 40, 50, 60, 70], colours: ['#ffffe5', '#d9f0a3', '#addd8e', '#78c679', '#31a354', '#006837'] } },
+        { id: 'co2', label: 'Median CO₂ emissions', kind: 'rate', value: 'epc co2', rank: null, areas: ['lsoa'], decimals: 1,
+          names: { E: 'Median CO₂ (tonnes a year)', W: 'Median CO₂ (tonnes a year)' },
+          classes: { breaks: [2.5, 3, 3.5, 4, 4.5], colours: ['#ffffb2', '#fed976', '#feb24c', '#fd8d3c', '#f03b20', '#bd0026'], unit: ' t' } },
+      ],
+    },
   ],
 
   // Credits for the boundaries, shown with the base map's in the map's attribution (bottom right).
-  attribution: 'Boundaries: Office for National Statistics, Scottish Government, NISRA; Open Government Licence v3.0. Fuel poverty: DESNZ, Scottish Government; Open Government Licence v3.0. Contains OS data © Crown copyright and database right 2026.',
+  attribution: 'Boundaries: Office for National Statistics, Scottish Government, NISRA; Open Government Licence v3.0. Fuel poverty: DESNZ, Scottish Government; energy performance: MHCLG; Open Government Licence v3.0. Contains OS data © Crown copyright and database right 2026.',
 
   // Starting view: the whole UK. [longitude, latitude], zoom.
   view: {
