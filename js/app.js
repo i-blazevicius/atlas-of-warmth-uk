@@ -99,12 +99,20 @@ function limitZoomOut() {
 }
 limitZoomOut();
 map.on('resize', limitZoomOut);
-if (V.extent) {                            // a wall: the centre of the view can't leave the data's extent, so the UK never drifts off the screen
-  const pad = V.wallPadding ?? 0, [[w, so], [e, n]] = V.extent;
+// A wall: the view can't be dragged beyond the data's extent. Along a side where the window shows more than the
+// extent (always the case fully zoomed out), the view is held centred, so the furthest zoom-out is effectively fixed.
+if (V.extent) {
+  const M = (lng, lat) => maplibregl.MercatorCoordinate.fromLngLat([lng, lat]);
+  const slack = V.wallPadding ?? 0;            // extra room, as a share of the extent's size
+  const [[w, so], [e, n]] = V.extent, nw = M(w, n), se = M(e, so);
+  const px = (se.x - nw.x) * slack, py = (se.y - nw.y) * slack;
+  const X0 = nw.x - px, X1 = se.x + px, Y0 = nw.y - py, Y1 = se.y + py;
+  const clamp = (c, half, lo, hi) => (hi - lo <= 2 * half ? (lo + hi) / 2 : Math.min(Math.max(c, lo + half), hi - half));
   map.on('move', () => {
-    const c = map.getCenter();
-    const lng = Math.min(Math.max(c.lng, w - pad), e + pad), lat = Math.min(Math.max(c.lat, so - pad), n + pad);
-    if (lng !== c.lng || lat !== c.lat) map.setCenter([lng, lat]);
+    const b = map.getBounds(), tl = M(b.getWest(), b.getNorth()), br = M(b.getEast(), b.getSouth());
+    const c = M(map.getCenter().lng, map.getCenter().lat);
+    const x = clamp(c.x, (br.x - tl.x) / 2, X0, X1), y = clamp(c.y, (br.y - tl.y) / 2, Y0, Y1);
+    if (Math.abs(x - c.x) > 1e-9 || Math.abs(y - c.y) > 1e-9) map.setCenter(new maplibregl.MercatorCoordinate(x, y).toLngLat());
   });
 }
 map.dragRotate.disable();                  // the map stays north-up, so the north arrow stays true

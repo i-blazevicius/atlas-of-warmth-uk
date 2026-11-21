@@ -121,9 +121,11 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .legend-title { margin: 0 0 6px; font-family: var(--font-label); font-weight: var(--label-weight); font-size: var(--label-size); text-transform: var(--label-case); letter-spacing: var(--label-tracking); color: var(--ink-dim); max-width: 220px; }
 .legend-row { display: flex; align-items: center; gap: 8px; height: 16px; font-size: 12px; }
 .legend-row i { width: 22px; height: 12px; border: 1px solid var(--panel-line); flex: none; }
-.north { position: absolute; z-index: 2; left: 12px; bottom: 10px; width: 26px; height: 26px; }
-.north circle { fill: var(--panel-bg); stroke: var(--ink); stroke-width: 1.2; }
-.north path { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+/* North arrow and scale bar: the same height and the same 1px line */
+:root { --furniture-h: 20px; }
+.north { position: absolute; z-index: 2; left: 12px; bottom: 10px; width: var(--furniture-h); height: var(--furniture-h); overflow: visible; }
+.north circle, .north path { fill: none; stroke: var(--ink); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.north circle { fill: var(--panel-bg); }
 
 /* Click panel: one row per measure, a coloured block holding the decile number. The exact rank is a tooltip. */
 .panel-measure { position: relative; display: flex; align-items: center; gap: 10px; padding: 3px 0; }
@@ -144,14 +146,29 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .legend-note { margin: 8px 0 0; max-width: 250px; color: var(--ink-faint); font-size: 11px; line-height: 1.35; }
 /* MapLibre's own controls, in the same square, thin-bordered style as the panels */
 .maplibregl-ctrl-bottom-left { left: 38px; }
+.maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale { margin: 0 0 10px 0; }
 .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 0 12px 10px 0; }
-.maplibregl-ctrl-group, .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact, .maplibregl-ctrl-attrib-button {
+.maplibregl-ctrl-group, .maplibregl-ctrl-group:not(:empty), .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact {
   border-radius: 0; box-shadow: none;
 }
-.maplibregl-ctrl-group, .maplibregl-ctrl-attrib.maplibregl-compact {
-  background: var(--panel-bg); border: 1px solid var(--panel-line);
-}
-.maplibregl-ctrl-group button { border-radius: 0; }
+.maplibregl-ctrl-group, .maplibregl-ctrl-attrib.maplibregl-compact { background: var(--panel-bg); border: 1px solid var(--panel-line); }
+.maplibregl-ctrl-group button, .maplibregl-ctrl-group button:focus { border-radius: 0; box-shadow: none; }
 .maplibregl-ctrl-group button + button { border-top: 1px solid var(--panel-line); }
+/* Credits: a box as wide as the zoom buttons holding a plain letter i; opened, the text sits to its left with some room */
+.maplibregl-ctrl-attrib.maplibregl-compact { min-height: 29px; padding: 0 29px 0 0; }
+.maplibregl-ctrl-attrib.maplibregl-compact-show { padding: 6px 41px 6px 10px; }
+.maplibregl-ctrl-attrib-inner { line-height: 1.45; }
+.maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button,
+.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button {
+  top: auto; bottom: 0; right: 0; width: 29px; height: 29px; border: 0; border-radius: 0; outline: none; box-shadow: none;
+  background: none; color: var(--ink); font: 500 15px/29px var(--font-ui); text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button::before { content: 'i'; }
+.maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button:focus, .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button:focus-visible { box-shadow: none; outline: none; }
+.maplibregl-ctrl-attrib.maplibregl-compact::after { display: none; }
 .maplibregl-ctrl-attrib { font-family: var(--font-ui); font-size: 11px; color: var(--ink-dim); }
-.maplibregl-ctrl-scale { background: var(--panel-bg); color: var(--ink); border-color: var(--ink); font-family: var(--font-ui); border-radius: 0; }
+.maplibregl-ctrl-scale {
+  height: var(--furniture-h); line-height: calc(var(--furniture-h) - 1px); padding: 0 5px;
+  background: var(--panel-bg); color: var(--ink); border-color: var(--ink); border-width: 0 1px 1px; border-radius: 0; font-family: var(--font-ui);
+}
