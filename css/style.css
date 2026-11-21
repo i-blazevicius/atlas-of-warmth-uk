@@ -19,14 +19,14 @@
   --font-body: 'Noto Sans', system-ui, sans-serif;
   --font-ui: 'Noto Sans', system-ui, sans-serif;
   --font-label: 'Noto Sans', system-ui, sans-serif;
-  --weight-title: 600;
+  --weight-title: 500;
   --weight-display: 500;
   --weight-body: 400;
   --style-title: normal;
   --style-display: normal;
   --style-body: normal;
   --style-label: normal;
-  --title-size: 22px;
+  --title-size: 35px;
   --name-size: 20px;
   --body-size: 13px;
   --label-case: none;
@@ -71,7 +71,7 @@ body { font-family: var(--font-body); font-weight: var(--weight-body); font-styl
   font-size: 22px; line-height: 1; cursor: pointer;
 }
 
-.title { margin: 0; font-family: var(--font-title); font-weight: var(--weight-title); font-style: var(--style-title); font-size: var(--title-size); }
+.title { line-height: 1; margin: 0; font-family: var(--font-title); font-weight: var(--weight-title); font-style: var(--style-title); font-size: var(--title-size); }
 .count, .hint { margin: 0 0 6px; color: var(--ink-dim); }
 .control-group { margin-top: 12px; }
 .control-label {
@@ -98,14 +98,16 @@ body { font-family: var(--font-body); font-weight: var(--weight-body); font-styl
 
 /* Base map and dataset controls */
 .layer-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
-.layer-row.sub { padding-left: 22px; color: var(--ink-dim); }
+.layer-row.sub { padding-left: 18px; color: var(--ink-dim); }
 .layer-row label { flex: 1; cursor: pointer; }
 .outline-head { margin-top: 8px; }
 .outline-swatch { width: 26px; border-top: 2px solid #222; margin-right: 4px; }
 input[type="range"] { width: 110px; accent-color: var(--ink); }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margin: 0; }
-.dataset { border-top: 1px solid var(--panel-line); padding-top: 4px; }
-.dataset > summary { display: flex; align-items: center; gap: 8px; padding: 2px 0 6px; cursor: pointer; list-style: none; }
+.dataset { margin-top: 12px; }
+.dataset > summary { display: flex; align-items: center; gap: 8px; padding: 2px 0 5px; margin-bottom: 4px; border-bottom: 1px solid var(--panel-line); cursor: pointer; list-style: none; }
+.dataset.off > .measures, .dataset.off > .sublayers, .dataset.off > .layer-row { opacity: 0.45; }
+.sublayers .layer-row.sub { padding-left: 18px; }
 .dataset > summary::-webkit-details-marker { display: none; }
 .dataset > summary::before { content: '▾'; color: var(--ink-faint); width: 10px; transition: transform 0.15s; }
 .dataset:not([open]) > summary::before { transform: rotate(-90deg); }
@@ -115,13 +117,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .measures .coverage { color: var(--ink-faint); font-size: 11px; }
 
 /* Legend and north arrow */
-.furniture { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.furniture { display: block; }
 .legend-title { margin: 0 0 6px; font-family: var(--font-label); font-weight: var(--label-weight); font-size: var(--label-size); text-transform: var(--label-case); letter-spacing: var(--label-tracking); color: var(--ink-dim); max-width: 220px; }
 .legend-row { display: flex; align-items: center; gap: 8px; height: 16px; font-size: 12px; }
 .legend-row i { width: 22px; height: 12px; border: 1px solid var(--panel-line); flex: none; }
-.north { width: 22px; height: 36px; flex: none; }
-.north-arrow { fill: var(--ink); }
-.north-n { fill: var(--ink); font-size: 9px; font-family: var(--font-label); }
+.north { position: absolute; z-index: 2; left: 12px; bottom: 10px; width: 26px; height: 26px; }
+.north circle { fill: var(--panel-bg); stroke: var(--ink); stroke-width: 1.2; }
+.north path { fill: none; stroke: var(--ink); stroke-width: 1.4; }
 
 /* Click panel: one row per measure, a coloured block holding the decile number. The exact rank is a tooltip. */
 .panel-measure { position: relative; display: flex; align-items: center; gap: 10px; padding: 3px 0; }
@@ -134,11 +136,22 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .panel-measure.current .name { font-weight: 600; }
 .panel-measure .name { line-height: 1.25; }
 .panel-measure[data-tip]:hover::after {
-  content: attr(data-tip); position: absolute; left: 46px; bottom: calc(100% - 2px); z-index: 3; white-space: nowrap;
+  content: attr(data-tip); position: absolute; left: 46px; bottom: calc(100% - 2px); z-index: 3; width: max-content; max-width: calc(100% - 64px);
   padding: 3px 7px; background: var(--ink); color: var(--space); font-size: 11px; border-radius: var(--radius); pointer-events: none;
 }
 .panel-note { margin: 10px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.4; }
 .panel-parent { margin: 0 0 8px; color: var(--ink-dim); }
 .legend-note { margin: 8px 0 0; max-width: 250px; color: var(--ink-faint); font-size: 11px; line-height: 1.35; }
-.maplibregl-ctrl-attrib { font-family: var(--font-ui); font-size: 11px; }
-.maplibregl-ctrl-scale { background: var(--panel-bg); color: var(--ink); border-color: var(--ink); font-family: var(--font-ui); }
+/* MapLibre's own controls, in the same square, thin-bordered style as the panels */
+.maplibregl-ctrl-bottom-left { left: 38px; }
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 0 12px 10px 0; }
+.maplibregl-ctrl-group, .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact, .maplibregl-ctrl-attrib-button {
+  border-radius: 0; box-shadow: none;
+}
+.maplibregl-ctrl-group, .maplibregl-ctrl-attrib.maplibregl-compact {
+  background: var(--panel-bg); border: 1px solid var(--panel-line);
+}
+.maplibregl-ctrl-group button { border-radius: 0; }
+.maplibregl-ctrl-group button + button { border-top: 1px solid var(--panel-line); }
+.maplibregl-ctrl-attrib { font-family: var(--font-ui); font-size: 11px; color: var(--ink-dim); }
+.maplibregl-ctrl-scale { background: var(--panel-bg); color: var(--ink); border-color: var(--ink); font-family: var(--font-ui); border-radius: 0; }

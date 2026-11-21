@@ -58,6 +58,7 @@ for (const a of AREA_SETS) {
 // Administrative outlines: a white casing, then the line, for each level (local authorities lowest).
 const OUTLINES = CONFIG.outlines?.layers ?? [];
 state.outlines = Object.fromEntries(OUTLINES.map((o) => [o.id, o.on !== false]));
+state.outlinesOn = true;                      // master switch; the three levels keep their own state underneath
 if (CONFIG.outlines?.file) {
   sources.outlines = { type: 'vector', url: `pmtiles://${new URL(CONFIG.outlines.file, location.href).href}` };
   for (const o of OUTLINES) {
@@ -75,7 +76,7 @@ if (CONFIG.outlines?.file) {
 }
 function applyOutlines() {
   for (const o of OUTLINES) for (const id of [`outline-${o.id}`, `outline-casing-${o.id}`]) {
-    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', state.outlines[o.id] ? 'visible' : 'none');
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', state.outlinesOn && state.outlines[o.id] ? 'visible' : 'none');
   }
 }
 for (const a of AREA_SETS) {
@@ -98,6 +99,14 @@ function limitZoomOut() {
 }
 limitZoomOut();
 map.on('resize', limitZoomOut);
+if (V.extent) {                            // a wall: the centre of the view can't leave the data's extent, so the UK never drifts off the screen
+  const pad = V.wallPadding ?? 0, [[w, so], [e, n]] = V.extent;
+  map.on('move', () => {
+    const c = map.getCenter();
+    const lng = Math.min(Math.max(c.lng, w - pad), e + pad), lat = Math.min(Math.max(c.lat, so - pad), n + pad);
+    if (lng !== c.lng || lat !== c.lat) map.setCenter([lng, lat]);
+  });
+}
 map.dragRotate.disable();                  // the map stays north-up, so the north arrow stays true
 map.touchZoomRotate.disableRotation();
 const mapLoaded = new Promise((resolve) => map.once('load', resolve));
@@ -117,7 +126,7 @@ async function addUnderlay() {
     style = await res.json();
   } catch (e) {
     problem(`The base map could not be loaded (${e.message}); the data is shown without it.`);
-    for (const id of ['base-on', 'base-labels']) $(id)?.closest('.layer-row')?.remove();
+    $('base-group')?.remove();
     return;
   }
   if (style.glyphs) map.setGlyphs(style.glyphs);
@@ -238,35 +247,48 @@ function slider(value, onInput, label) {
   r.addEventListener('input', () => onInput(Number(r.value) / 100));
   return r;
 }
+// A foldable group: a master checkbox, a title, an optional opacity slider, and a body that keeps its own
+// checkbox states while the master is off (they only show dimmed).
+function layerGroup({ label, checked, onMaster, sliderValue, onSlider, body }) {
+  const group = Object.assign(document.createElement('details'), { className: 'dataset', open: true });
+  const sum = document.createElement('summary');
+  const on = Object.assign(document.createElement('input'), { type: 'checkbox', checked });
+  on.setAttribute('aria-label', `Show ${label}`);
+  const dim = () => group.classList.toggle('off', !on.checked);
+  on.addEventListener('change', () => { dim(); onMaster(on.checked); });
+  sum.append(on, Object.assign(document.createElement('span'), { className: 'dataset-label', textContent: label }));
+  if (onSlider) sum.append(slider(sliderValue, onSlider, `${label} opacity`));
+  group.append(sum, body);
+  dim();
+  return group;
+}
+function subRow(id, text, checked, onChange, extra) {
+  const r = document.createElement('div');
+  r.className = 'layer-row sub';
+  const c = Object.assign(document.createElement('input'), { type: 'checkbox', checked, id });
+  c.addEventListener('change', () => onChange(c.checked));
+  r.append(c, Object.assign(document.createElement('label'), { htmlFor: id, textContent: text }));
+  if (extra) r.append(extra);
+  return r;
+}
 function buildBaseControls() {
   const box = $('base-controls');
   box.innerHTML = '';
-  const row = document.createElement('div');
-  row.className = 'layer-row';
-  const on = Object.assign(document.createElement('input'), { type: 'checkbox', checked: state.base.on, id: 'base-on' });
-  on.addEventListener('change', () => { state.base.on = on.checked; applyUnderlay(); });
-  const lab = Object.assign(document.createElement('label'), { htmlFor: 'base-on', textContent: CONFIG.underlay?.label ?? 'Base map' });
-  row.append(on, lab, slider(state.base.opacity, (v) => { state.base.opacity = v; applyUnderlay(); }, 'Base map opacity'));
-  const row2 = document.createElement('div');
-  row2.className = 'layer-row sub';
-  const names = Object.assign(document.createElement('input'), { type: 'checkbox', checked: state.base.labels, id: 'base-labels' });
-  names.addEventListener('change', () => { state.base.labels = names.checked; applyUnderlay(); });
-  row2.append(names, Object.assign(document.createElement('label'), { htmlFor: 'base-labels', textContent: 'Place names' }));
-  box.append(row, row2);
+  const names = subRow('base-labels', 'Place names', state.base.labels, (v) => { state.base.labels = v; applyUnderlay(); });
+  const base = layerGroup({ label: CONFIG.underlay?.label ?? 'Base map', checked: state.base.on,
+    onMaster: (v) => { state.base.on = v; applyUnderlay(); },
+    sliderValue: state.base.opacity, onSlider: (v) => { state.base.opacity = v; applyUnderlay(); }, body: names });
+  base.id = 'base-group';
+  box.append(base);
   if (!OUTLINES.length) return;
-  const head = Object.assign(document.createElement('span'), { className: 'control-label outline-head', textContent: 'Outlines' });
-  box.append(head);
+  const rows = Object.assign(document.createElement('div'), { className: 'sublayers' });
   for (const o of [...OUTLINES].reverse()) {          // nations first
-    const r = document.createElement('div');
-    r.className = 'layer-row';
-    const c = Object.assign(document.createElement('input'), { type: 'checkbox', checked: state.outlines[o.id], id: `outline-on-${o.id}` });
-    c.addEventListener('change', () => { state.outlines[o.id] = c.checked; applyOutlines(); });
     const swatch = Object.assign(document.createElement('i'), { className: 'outline-swatch' });
     swatch.style.borderTopWidth = `${Math.max(1, Math.round(o.width[0] + 0.5))}px`;
     swatch.style.borderTopColor = o.color;
-    r.append(c, Object.assign(document.createElement('label'), { htmlFor: `outline-on-${o.id}`, textContent: o.label }), swatch);
-    box.append(r);
+    rows.append(subRow(`outline-on-${o.id}`, o.label, state.outlines[o.id], (v) => { state.outlines[o.id] = v; applyOutlines(); }, swatch));
   }
+  box.append(layerGroup({ label: 'Outlines', checked: state.outlinesOn, onMaster: (v) => { state.outlinesOn = v; applyOutlines(); }, body: rows }));
 }
 function buildDatasetControls() {
   const box = $('datasets');
@@ -416,9 +438,10 @@ window.addEventListener('popstate', route);
 // ── Start ──────────────────────────────────────────────────
 async function start() {
   await mapLoaded;
+  // Bottom corners stack the latest control on top, so the credits go in first to sit below the zoom buttons.
+  map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: CONFIG.attribution }), 'bottom-right');
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   map.addControl(new maplibregl.ScaleControl({ maxWidth: 140, unit: 'metric' }), 'bottom-left');
-  map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: CONFIG.attribution }), 'bottom-right');
   // Start with the credits folded into their ⓘ button (MapLibre opens them on wide screens).
   map.once('idle', () => document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'));
   buildBaseControls();

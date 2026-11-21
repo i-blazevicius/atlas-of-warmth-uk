@@ -119,6 +119,7 @@ export default {
     center: [-3.2, 55.0],
     zoom: 5.0,
     minZoom: 4,                       // the floor; the map also stops at the data's full extent (below)
+    wallPadding: 0,                   // degrees of slack beyond the extent: the view's centre can't be dragged past it
     extent: [[-8.7, 49.8], [1.9, 60.9]],   // [[west, south], [east, north]]: zooming out stops when this just fits
     maxZoom: 15,
   },

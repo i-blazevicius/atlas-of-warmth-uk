@@ -22,25 +22,21 @@
       <p class="count" id="count">loading…</p>
       <details class="problems" id="problems" hidden></details>
       <div class="control-group" id="base-controls"></div>
-      <div class="control-group">
-        <span class="control-label">Datasets</span>
-        <div id="datasets"></div>
-      </div>
+      <div id="datasets"></div>
     </div>
   </details>
 
-  <!-- Legend and north arrow. The scale bar is MapLibre's, below the column. -->
+  <!-- Legend. The scale bar is MapLibre's, below the column. -->
   <details id="furniture" class="dock dock-bottom" open>
     <summary>Legend</summary>
     <div class="dock-body furniture">
       <div class="legend" id="legend"></div>
-      <svg class="north" id="north" viewBox="0 0 24 40" aria-label="North">
-        <path d="M12 2 L20 30 L12 24 L4 30 Z" class="north-arrow"/>
-        <text x="12" y="39" text-anchor="middle" class="north-n">N</text>
-      </svg>
     </div>
   </details>
   </div>
+
+  <!-- North arrow: a circle with a line from the centre to the top, left of MapLibre's scale bar -->
+  <svg class="north" id="north" viewBox="0 0 24 24" aria-label="North is up"><circle cx="12" cy="12" r="10.5"/><path d="M12 12 V1.5"/></svg>
 
   <!-- Area info panel (right) -->
   <aside id="panel" class="panel" hidden>
