@@ -1,4 +1,4 @@
-Local authority code,Local authority name,IMD rank,Income rank,Employment rank,Education rank,Health rank,Crime rank,Housing barriers rank,Living environment rank,IDACI rank,IDAOPI rank
+la_code,la_name,imd,income,employment,education,health,crime,barriers,living,idaci,idaopi
 E06000001,Hartlepool,30,32,8,80,5,24,261,224,36,33
 E06000002,Middlesbrough,21,19,12,27,13,4,156,133,19,44
 E06000003,Redcar and Cleveland,62,65,27,105,35,49,236,187,60,74

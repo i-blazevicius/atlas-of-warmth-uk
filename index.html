@@ -13,22 +13,23 @@
 <body>
   <div id="map"></div>
 
-  <!-- Control panel (top left), foldable -->
+  <!-- Left column: control panel (top) and legend (bottom), the same width, both foldable. They share one
+       column so they never overlap; the control panel scrolls when space runs short. -->
+  <div class="left-docks">
   <details id="controls" class="dock dock-top" open>
     <summary><span class="title" id="title">Portrait of a Nation</span></summary>
     <div class="dock-body">
       <p class="count" id="count">loading…</p>
       <details class="problems" id="problems" hidden></details>
+      <div class="control-group" id="base-controls"></div>
       <div class="control-group">
-        <span class="control-label">Dataset</span>
-        <p class="dataset-name" id="dataset-name"></p>
-        <div class="measures" id="measures" role="radiogroup" aria-label="Measure"></div>
+        <span class="control-label">Datasets</span>
+        <div id="datasets"></div>
       </div>
     </div>
   </details>
 
-  <!-- Legend and north arrow (bottom left, same width as the control panel), foldable.
-       The scale bar is MapLibre's, below it. -->
+  <!-- Legend and north arrow. The scale bar is MapLibre's, below the column. -->
   <details id="furniture" class="dock dock-bottom" open>
     <summary>Legend</summary>
     <div class="dock-body furniture">
@@ -39,6 +40,7 @@
       </svg>
     </div>
   </details>
+  </div>
 
   <!-- Area info panel (right) -->
   <aside id="panel" class="panel" hidden>

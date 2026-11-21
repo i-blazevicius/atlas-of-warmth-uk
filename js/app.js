@@ -7,13 +7,15 @@ const Styles = await import(`./styles.js${q}`);
 
 const core = createCore(CONFIG);
 const { state, esc, fail, problem, resolveColumns, loadCSV } = core;
-state.selected = null;       // the open area's ONS code, e.g. E01000001
+state.selected = null;       // the open area's code, e.g. E01000001
 state.datasets = [];         // loaded datasets (see loadDataset)
 state.active = null;         // { dataset, measure }: what colours the map
 state.rows = new Map();      // area code -> [{ dataset, row }]
+state.base = { on: true, opacity: CONFIG.underlay?.opacity ?? 1, labels: CONFIG.underlay?.labels ?? true, layers: [] };
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Number(n).toLocaleString('en-GB');
+const NATIONS = CONFIG.nations ?? {};
 // Dark or white text, whichever reads better on a given background colour.
 function textOn(hex) {
   const n = parseInt(String(hex).replace('#', ''), 16);
@@ -21,31 +23,43 @@ function textOn(hex) {
   return lum > 0.6 ? '#1a1a1a' : '#ffffff';
 }
 
-// ── Looks ──────────────────────────────────────────────────
+// ── Look ───────────────────────────────────────────────────
 const lib = await Styles.loadLibrary(CONFIG, fail);
-let look = Styles.startingStyle(lib);
+const look = Styles.startingStyle(lib);
 Styles.applyCss(look, lib.fonts);
 Styles.reveal();
 document.title = CONFIG.title;
 $('title').textContent = CONFIG.title;
-const M = () => look?.map ?? {};
-const ramp = () => M().ramp ?? ['#67000d', '#a50f15', '#d7301f', '#ef6548', '#fc8d59', '#fdbb84', '#fdd49e', '#fee8c8', '#fff3d9', '#fffbea'];
+const M = look?.map ?? {};
+const RAMP = M.ramp ?? ['#67000d', '#a50f15', '#d7301f', '#ef6548', '#fc8d59', '#fdbb84', '#fdd49e', '#fee8c8', '#fff3d9', '#fffbea'];
+const NO_DATA = M.noData ?? '#e6e6e6';
+
+// ── Areas ──────────────────────────────────────────────────
+// Which boundary file holds an area: the first whose `codes` pattern matches the area code.
+const AREA_SETS = Object.entries(CONFIG.areas).map(([id, a]) => ({ id, ...a, re: new RegExp(a.codes) }));
+const areaSetOf = (code) => AREA_SETS.find((a) => a.re.test(code));
+// Area codes: ONS codes (E, W, S or N and 8 digits) or Northern Ireland's 2001 SOA codes (95AA01S1).
+const isAreaCode = (s) => /^([EWSN]\d{8}|95[A-Z]{2}\d{2}[SWC]\d)$/.test(s ?? '');
 
 // ── Map ────────────────────────────────────────────────────
 const protocol = new pmtiles.Protocol();
 maplibregl.addProtocol('pmtiles', protocol.tile);
 
-const sources = {}, layers = [{ id: 'background', type: 'background', paint: { 'background-color': M().background ?? '#ffffff' } }];
-for (const [id, a] of Object.entries(CONFIG.areas)) {
-  sources[`areas-${id}`] = { type: 'vector', url: `pmtiles://${new URL(a.file, location.href).href}`, promoteId: { [a.layer]: a.code } };
+const sources = {}, layers = [{ id: 'background', type: 'background', paint: { 'background-color': M.background ?? '#ffffff' } }];
+for (const a of AREA_SETS) {
+  sources[`areas-${a.id}`] = { type: 'vector', url: `pmtiles://${new URL(a.file, location.href).href}`, promoteId: { [a.layer]: a.code } };
   layers.push(
-    { id: `fill-${id}`, type: 'fill', source: `areas-${id}`, 'source-layer': a.layer, paint: { 'fill-color': M().noData ?? '#e6e6e6', 'fill-antialias': false } },
-    { id: `line-${id}`, type: 'line', source: `areas-${id}`, 'source-layer': a.layer,
-      paint: { 'line-color': M().areaLine ?? '#9a9a9a', 'line-width': 0.4, 'line-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0, 10, 0.8] } },
-    { id: `selected-${id}`, type: 'line', source: `areas-${id}`, 'source-layer': a.layer, filter: ['==', ['get', a.code], ''],
-      paint: { 'line-color': M().selected ?? '#111111', 'line-width': 2.5 } },
+    { id: `fill-${a.id}`, type: 'fill', source: `areas-${a.id}`, 'source-layer': a.layer,
+      paint: { 'fill-color': NO_DATA, 'fill-opacity': 0.8, 'fill-antialias': false } },
+    { id: `line-${a.id}`, type: 'line', source: `areas-${a.id}`, 'source-layer': a.layer,
+      paint: { 'line-color': M.areaLine ?? '#9a9a9a', 'line-width': 0.4, 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0, 11, 0.7] } },
   );
 }
+for (const a of AREA_SETS) {
+  layers.push({ id: `selected-${a.id}`, type: 'line', source: `areas-${a.id}`, 'source-layer': a.layer, filter: ['==', ['get', a.code], ''],
+    paint: { 'line-color': M.selected ?? '#111111', 'line-width': 2.5 } });
+}
+const FILLS = AREA_SETS.map((a) => `fill-${a.id}`);
 const V = CONFIG.view;
 const map = new maplibregl.Map({
   container: 'map',
@@ -57,23 +71,46 @@ map.dragRotate.disable();                  // the map stays north-up, so the nor
 map.touchZoomRotate.disableRotation();
 const mapLoaded = new Promise((resolve) => map.once('load', resolve));
 
-// Colour of an area for the active measure: its value in feature state (set once per measure when the data loads).
-const stateKey = (ds, m) => `${ds.id}:${m.id}`;
-function fillExpression(ds, m) {
-  const cols = ramp();
-  const match = ['match', ['coalesce', ['feature-state', stateKey(ds, m)], 0]];
-  cols.forEach((c, i) => match.push(i + 1, c));
-  match.push(M().noData ?? '#e6e6e6');
-  return match;
+// ── Base map (underlay) ────────────────────────────────────
+// The base map's own style is read and its layers are slotted in: everything except place names goes
+// under the data, place names over it. Its opacity and visibility are separate from the data's.
+const OPACITY_PROP = { background: 'background-opacity', fill: 'fill-opacity', line: 'line-opacity', raster: 'raster-opacity',
+  'fill-extrusion': 'fill-extrusion-opacity', circle: 'circle-opacity' };
+async function addUnderlay() {
+  const U = CONFIG.underlay;
+  if (!U?.style) return;
+  let style;
+  try {
+    const res = await fetch(U.style, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`answered ${res.status}`);
+    style = await res.json();
+  } catch (e) {
+    problem(`The base map could not be loaded (${e.message}); the data is shown without it.`);
+    $('base-controls').hidden = true;
+    return;
+  }
+  if (style.glyphs) map.setGlyphs(style.glyphs);
+  if (style.sprite) map.setSprite(style.sprite);
+  for (const [id, src] of Object.entries(style.sources ?? {})) map.addSource(`base:${id}`, src);
+  for (const l of style.layers ?? []) {
+    const layer = { ...l, id: `base:${l.id}` };
+    if (l.source) layer.source = `base:${l.source}`;
+    const isLabel = l.type === 'symbol';
+    map.addLayer(layer, isLabel ? undefined : FILLS[0]);      // labels on top; the rest under the data
+    const prop = OPACITY_PROP[l.type];
+    state.base.layers.push({ id: layer.id, isLabel, prop, original: prop ? map.getPaintProperty(layer.id, prop) : undefined });
+  }
+  applyUnderlay();
 }
-function paintMap() {
-  if (!map.getLayer('background')) return;
-  map.setPaintProperty('background', 'background-color', M().background ?? '#ffffff');
-  for (const id of Object.keys(CONFIG.areas)) {
-    map.setPaintProperty(`line-${id}`, 'line-color', M().areaLine ?? '#9a9a9a');
-    map.setPaintProperty(`selected-${id}`, 'line-color', M().selected ?? '#111111');
-    const { dataset, measure } = state.active ?? {};
-    map.setPaintProperty(`fill-${id}`, 'fill-color', dataset && dataset.areas === id ? fillExpression(dataset, measure) : (M().noData ?? '#e6e6e6'));
+function applyUnderlay() {
+  const { on, opacity, labels } = state.base;
+  for (const l of state.base.layers) {
+    const visible = l.isLabel ? on && labels : on && opacity > 0;
+    map.setLayoutProperty(l.id, 'visibility', visible ? 'visible' : 'none');
+    // Opacity is scaled where the style gives a plain number (or none); zoom-dependent values are left as they are.
+    if (!l.isLabel && l.prop && (l.original === undefined || typeof l.original === 'number')) {
+      map.setPaintProperty(l.id, l.prop, (l.original ?? 1) * opacity);
+    }
   }
 }
 
@@ -81,12 +118,13 @@ function paintMap() {
 // Reads a dataset's CSV, finds its columns by header text and keeps one row per area code.
 async function loadDataset(cfg) {
   const { rows, headers } = await loadCSV(cfg.file, cfg.label);
-  const wanted = { key: cfg.key, name: cfg.name, pcode: cfg.parent?.code, pname: cfg.parent?.name };
-  for (const m of cfg.measures) { wanted[`v:${m.id}`] = m.value; if (m.rank) wanted[`r:${m.id}`] = m.rank; }
+  const wanted = { key: cfg.key, name: cfg.name, nation: cfg.nation, pcode: cfg.parent?.code, pname: cfg.parent?.name };
+  for (const m of cfg.measures) { wanted[`v:${m.id}`] = m.value ?? `${m.id} decile`; wanted[`r:${m.id}`] = m.rank ?? `${m.id} rank`; }
   const col = resolveColumns(headers, Object.fromEntries(Object.entries(wanted).filter(([, v]) => v)));
   if (!col.key) throw fail('E4', `${cfg.label}: no "${cfg.key}" column, so the rows cannot be matched to areas. Check the header row of ${cfg.file}, or key in js/config.js.`);
   for (const [k, v] of Object.entries(wanted)) if (v && !col[k]) problem(`${cfg.label}: column "${v}" not found (was it renamed?)`);
-  const ds = { ...cfg, col, byCode: new Map(), measures: cfg.measures.filter((m) => col[`v:${m.id}`]), parentRanks: null };
+  const ds = { ...cfg, col, byCode: new Map(), measures: cfg.measures.filter((m) => col[`v:${m.id}`]), parentRanks: null,
+    visible: true, opacity: cfg.opacity ?? 0.8, unmapped: {} };
   for (const r of rows) {
     const code = String(r[col.key] ?? '').trim();
     if (!code) continue;
@@ -98,7 +136,7 @@ async function loadDataset(cfg) {
   if (cfg.parentRanks) {
     try {
       const p = await loadCSV(cfg.parentRanks.file, `${cfg.label}: ${cfg.parentRanks.label} ranks`);
-      const pk = resolveColumns(p.headers, { key: cfg.parentRanks.key, ...Object.fromEntries(ds.measures.map((m) => [m.id, m.rank?.replace(/ rank$/i, ' rank')])) });
+      const pk = resolveColumns(p.headers, { key: cfg.parentRanks.key, ...Object.fromEntries(ds.measures.map((m) => [m.id, m.id])) });
       ds.parentRanks = { rows: new Map(p.rows.map((r) => [String(r[pk.key] ?? '').trim(), r])), cols: pk, total: p.rows.length, label: cfg.parentRanks.label };
     } catch (e) { problem(`${cfg.label}: ${cfg.parentRanks.label} ranks could not be read (${e.message})`); }
   }
@@ -107,16 +145,36 @@ async function loadDataset(cfg) {
 
 // Writes every area's value for every measure into feature state, once, so that switching measure
 // only changes the paint expression (no per-area work).
-async function applyData(ds) {
-  const a = CONFIG.areas[ds.areas];
+const stateKey = (ds, m) => `${ds.id}:${m.id}`;
+function applyData(ds) {
   const t0 = performance.now();
   for (const [code, r] of ds.byCode) {
+    const a = areaSetOf(code);
+    if (!a) { const n = String(r[ds.col.nation] ?? '?'); ds.unmapped[n] = (ds.unmapped[n] ?? 0) + 1; continue; }
     const st = {};
-    for (const m of ds.measures) { const v = Number(r[ds.col[`v:${m.id}`]]); if (Number.isFinite(v)) st[stateKey(ds, m)] = v; }
-    map.setFeatureState({ source: `areas-${ds.areas}`, sourceLayer: a.layer, id: code }, st);
+    for (const m of ds.measures) { const v = Number(r[ds.col[`v:${m.id}`]]); if (r[ds.col[`v:${m.id}`]] !== '' && Number.isFinite(v)) st[stateKey(ds, m)] = v; }
+    map.setFeatureState({ source: `areas-${a.id}`, sourceLayer: a.layer, id: code }, st);
+  }
+  for (const [n, count] of Object.entries(ds.unmapped)) {
+    problem(`${ds.label}: ${fmt(count)} areas in ${NATIONS[n] ?? n} have data but no boundaries yet, so they are not on the map.`);
   }
   state.timing = { featureState: Math.round(performance.now() - t0), areas: ds.byCode.size };
   console.info(`feature state set for ${ds.byCode.size} areas in ${state.timing.featureState} ms`);
+}
+
+function fillExpression(ds, m) {
+  const match = ['match', ['coalesce', ['feature-state', stateKey(ds, m)], 0]];
+  RAMP.forEach((c, i) => match.push(i + 1, c));
+  match.push(NO_DATA);
+  return match;
+}
+function paintMap() {
+  const { dataset: ds, measure } = state.active ?? {};
+  for (const id of FILLS) {
+    map.setPaintProperty(id, 'fill-color', ds ? fillExpression(ds, measure) : NO_DATA);
+    // A dataset switched off is made fully transparent (not hidden), so areas can still be clicked.
+    map.setPaintProperty(id, 'fill-opacity', ds && ds.visible ? ds.opacity : 0);
+  }
 }
 
 function setActive(ds, measure) {
@@ -124,74 +182,125 @@ function setActive(ds, measure) {
   paintMap();
   renderLegend();
   if (state.selected) openArea(state.selected);
-  for (const input of $('measures').querySelectorAll('input')) input.checked = input.value === measure.id;
+  for (const input of document.querySelectorAll(`input[name="measure-${ds.id}"]`)) input.checked = input.value === measure.id;
 }
 
-function buildMeasureList(ds) {
-  $('dataset-name').textContent = ds.label;
-  const box = $('measures');
+// ── Control panel ──────────────────────────────────────────
+// Nations that have a measure, as a short note ("Wales, Scotland") when not all of them do.
+function coverage(ds, m) {
+  if (!m.names) return '';
+  const have = Object.keys(NATIONS).filter((n) => m.names[n] && ds.totals?.[n]);
+  return have.length && have.length < Object.keys(NATIONS).length ? have.map((n) => NATIONS[n]).join(', ') : '';
+}
+function slider(value, onInput, label) {
+  const r = Object.assign(document.createElement('input'), { type: 'range', min: 0, max: 100, step: 5, value: Math.round(value * 100) });
+  r.setAttribute('aria-label', label);
+  r.addEventListener('input', () => onInput(Number(r.value) / 100));
+  return r;
+}
+function buildBaseControls() {
+  const box = $('base-controls');
   box.innerHTML = '';
-  for (const m of ds.measures) {
-    const label = document.createElement('label');
-    const input = Object.assign(document.createElement('input'), { type: 'radio', name: 'measure', value: m.id });
-    input.addEventListener('change', () => setActive(ds, m));
-    label.append(input, document.createTextNode(m.label));
-    box.append(label);
+  const row = document.createElement('div');
+  row.className = 'layer-row';
+  const on = Object.assign(document.createElement('input'), { type: 'checkbox', checked: state.base.on, id: 'base-on' });
+  on.addEventListener('change', () => { state.base.on = on.checked; applyUnderlay(); });
+  const lab = Object.assign(document.createElement('label'), { htmlFor: 'base-on', textContent: CONFIG.underlay?.label ?? 'Base map' });
+  row.append(on, lab, slider(state.base.opacity, (v) => { state.base.opacity = v; applyUnderlay(); }, 'Base map opacity'));
+  const row2 = document.createElement('div');
+  row2.className = 'layer-row sub';
+  const names = Object.assign(document.createElement('input'), { type: 'checkbox', checked: state.base.labels, id: 'base-labels' });
+  names.addEventListener('change', () => { state.base.labels = names.checked; applyUnderlay(); });
+  row2.append(names, Object.assign(document.createElement('label'), { htmlFor: 'base-labels', textContent: 'Place names' }));
+  box.append(row, row2);
+}
+function buildDatasetControls() {
+  const box = $('datasets');
+  box.innerHTML = '';
+  for (const ds of state.datasets) {
+    const group = Object.assign(document.createElement('details'), { className: 'dataset', open: true });
+    const sum = document.createElement('summary');
+    const on = Object.assign(document.createElement('input'), { type: 'checkbox', checked: ds.visible });
+    on.setAttribute('aria-label', `Show ${ds.label}`);
+    on.addEventListener('change', () => { ds.visible = on.checked; paintMap(); renderLegend(); if (state.selected) openArea(state.selected); });
+    sum.append(on, Object.assign(document.createElement('span'), { className: 'dataset-label', textContent: ds.label }),
+      slider(ds.opacity, (v) => { ds.opacity = v; paintMap(); }, `${ds.label} opacity`));
+    const list = Object.assign(document.createElement('div'), { className: 'measures' });
+    list.setAttribute('role', 'radiogroup');
+    for (const m of ds.measures) {
+      const label = document.createElement('label');
+      const input = Object.assign(document.createElement('input'), { type: 'radio', name: `measure-${ds.id}`, value: m.id });
+      input.addEventListener('change', () => setActive(ds, m));
+      const text = document.createElement('span');
+      text.textContent = m.label;
+      const cov = coverage(ds, m);
+      if (cov) text.append(Object.assign(document.createElement('small'), { className: 'coverage', textContent: ` ${cov}` }));
+      label.append(input, text);
+      list.append(label);
+    }
+    group.append(sum, list);
+    box.append(group);
   }
 }
 
 // ── Legend ─────────────────────────────────────────────────
 function renderLegend() {
-  const { dataset, measure } = state.active ?? {};
-  if (!dataset) { $('furniture').hidden = true; return; }
+  const { dataset: ds, measure } = state.active ?? {};
+  if (!ds || !ds.visible) { $('furniture').hidden = true; return; }
   $('furniture').hidden = false;
-  const cols = ramp();
   const label = (i) => (i === 1 ? '1 · most deprived 10%' : i === 10 ? '10 · least deprived 10%' : String(i));
-  $('legend').innerHTML = `<p class="legend-title">${esc(measure.label)}<br>${esc(dataset.label)}</p>` +
-    cols.map((c, i) => `<div class="legend-row"><i style="background:${c}"></i>${label(i + 1)}</div>`).join('') +
-    `<div class="legend-row"><i style="background:${esc(M().noData ?? '#e6e6e6')}"></i>No data</div>`;
+  const cov = coverage(ds, measure);
+  $('legend').innerHTML = `<p class="legend-title">${esc(measure.label)}<br>${esc(ds.label)}${cov ? ` · ${esc(cov)} only` : ''}</p>` +
+    RAMP.map((c, i) => `<div class="legend-row"><i style="background:${c}"></i>${label(i + 1)}</div>`).join('') +
+    `<div class="legend-row"><i style="background:${esc(NO_DATA)}"></i>No data</div>` +
+    (ds.note ? `<p class="legend-note">${esc(ds.note)}</p>` : '');
 }
 
 // ── Area panel ─────────────────────────────────────────────
-// Area codes are ONS codes: E, W, S or N followed by 8 digits (E06000001, S01006506 …).
-const isAreaCode = (s) => /^[EWSN]\d{8}$/.test(s ?? '');
+// Only datasets that are switched on are listed.
 function openArea(code) {
   state.selected = code;
-  for (const id of Object.keys(CONFIG.areas)) map.setFilter(`selected-${id}`, ['==', ['get', CONFIG.areas[id].code], code]);
-  const entries = state.rows.get(code) ?? [];
+  for (const a of AREA_SETS) map.setFilter(`selected-${a.id}`, ['==', ['get', a.code], code]);
+  const entries = (state.rows.get(code) ?? []).filter((e) => e.dataset.visible);
   let html = `<p class="area-code">${esc(code)}</p>`;
   if (!entries.length) {
-    html += `<p class="area-name">${esc(code)}</p><p class="hint">No dataset has values for this area yet.</p>`;
+    html += `<p class="area-name">${esc(code)}</p><p class="hint">${state.rows.has(code) ? 'Switch a dataset on to see its values here.' : 'No dataset has values for this area.'}</p>`;
   }
-  for (const { dataset: ds, row } of entries) {
+  entries.forEach(({ dataset: ds, row }, i) => {
     const g = (k) => (ds.col[k] ? String(row[ds.col[k]] ?? '').trim() : '');
-    html += `<p class="area-name">${esc(g('name') || code)}</p>`;
-    if (g('pname')) html += `<p class="panel-parent">${esc(g('pname'))}</p>`;
+    const nation = g('nation');
+    if (i === 0) {
+      html += `<p class="area-name">${esc(g('name') || code)}</p>`;
+      html += `<p class="panel-parent">${esc([g('pname'), NATIONS[nation]].filter(Boolean).join(', '))}</p>`;
+    }
     html += `<p class="control-label">${esc(ds.label)}</p>`;
     for (const m of ds.measures) {
-      const v = Number(g(`v:${m.id}`)), rk = Number(g(`r:${m.id}`));
+      if (m.names && !m.names[nation]) continue;            // this nation has no such measure
+      const raw = g(`v:${m.id}`), v = Number(raw), rk = Number(g(`r:${m.id}`));
+      const has = raw !== '' && Number.isFinite(v);
       const cur = state.active?.measure === m && state.active?.dataset === ds;
-      const has = Number.isFinite(v);
-      const colour = has ? ramp()[v - 1] : (M().noData ?? '#e6e6e6');
-      const tip = Number.isFinite(rk) ? `Rank ${fmt(rk)} of ${fmt(ds.total)} (1 = most deprived)` : '';
+      const colour = has ? RAMP[v - 1] : NO_DATA;
+      const total = ds.totals?.[nation];
+      const tip = g(`r:${m.id}`) !== '' && Number.isFinite(rk)
+        ? `Rank ${fmt(rk)}${total ? ` of ${fmt(total)} in ${NATIONS[nation] ?? nation}` : ''} (1 = most deprived)` : '';
       html += `<div class="panel-measure${cur ? ' current' : ''}"${tip ? ` data-tip="${esc(tip)}"` : ''}>` +
         `<span class="block${has ? '' : ' none'}" style="background:${esc(colour)};color:${has ? textOn(colour) : 'inherit'}">${has ? v : '–'}</span>` +
-        `<span class="name">${esc(m.label)}</span></div>`;
+        `<span class="name">${esc(m.names?.[nation] ?? m.label)}</span></div>`;
     }
     const pr = ds.parentRanks?.rows.get(g('pcode'));
     const m0 = state.active?.dataset === ds ? state.active.measure : ds.measures[0];
     const prRank = pr && ds.parentRanks.cols[m0.id] ? Number(pr[ds.parentRanks.cols[m0.id]]) : NaN;
     if (Number.isFinite(prRank)) {
-      html += `<p class="panel-note">${esc(g('pname'))} ranks ${fmt(prRank)} of ${fmt(ds.parentRanks.total)} ${esc(ds.parentRanks.label)} on ${esc(m0.label)} (rank of average rank; 1 = most deprived).</p>`;
+      html += `<p class="panel-note">${esc(g('pname'))} ranks ${fmt(prRank)} of ${fmt(ds.parentRanks.total)} ${esc(ds.parentRanks.label)} on ${esc(m0.names?.[nation] ?? m0.label)} (rank of average rank; 1 = most deprived).</p>`;
     }
-    html += `<p class="panel-note">${esc(ds.source)}</p>`;
-  }
+    html += `<p class="panel-note">${esc(ds.sources?.[nation] ?? '')} ${esc(ds.licence ?? '')}</p>`;
+  });
   $('panel-body').innerHTML = html;
   $('panel').hidden = false;
 }
 function closeArea() {
   state.selected = null;
-  for (const id of Object.keys(CONFIG.areas)) if (map.getLayer(`selected-${id}`)) map.setFilter(`selected-${id}`, ['==', ['get', CONFIG.areas[id].code], '']);
+  for (const a of AREA_SETS) if (map.getLayer(`selected-${a.id}`)) map.setFilter(`selected-${a.id}`, ['==', ['get', a.code], '']);
   $('panel').hidden = true;
 }
 document.querySelector('[data-close="panel"]').addEventListener('click', () => { closeArea(); go(''); });
@@ -210,11 +319,11 @@ function showProblems() {
 }
 
 // ── Moving to an area ──────────────────────────────────────
-// Centroids (one point per area) are a separate small file, loaded only when a link or Back/Forward
+// Centroids (one point per area) are small separate files, loaded only when a link or Back/Forward
 // opens an area, never on an ordinary visit.
 const centroids = {};
 async function flyToArea(code) {
-  const a = Object.values(CONFIG.areas).find((x) => x.centroids);
+  const a = areaSetOf(code);
   if (!a?.centroids) return;
   try {
     if (!centroids[a.centroids]) {
@@ -255,27 +364,33 @@ async function start() {
   await mapLoaded;
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   map.addControl(new maplibregl.ScaleControl({ maxWidth: 140, unit: 'metric' }), 'bottom-left');
+  map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: CONFIG.attribution }), 'bottom-right');
+  buildBaseControls();
+  const underlay = addUnderlay();
 
-  for (const [id, a] of Object.entries(CONFIG.areas)) {
-    map.on('click', `fill-${id}`, (e) => {
+  for (const a of AREA_SETS) {
+    map.on('click', `fill-${a.id}`, (e) => {
       const code = e.features[0]?.properties?.[a.code];
       if (code) { openArea(code); go(code); }
     });
-    map.on('mouseenter', `fill-${id}`, () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', `fill-${id}`, () => { map.getCanvas().style.cursor = ''; });
+    map.on('mouseenter', `fill-${a.id}`, () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', `fill-${a.id}`, () => { map.getCanvas().style.cursor = ''; });
   }
   map.on('click', (e) => {
-    if (!map.queryRenderedFeatures(e.point, { layers: Object.keys(CONFIG.areas).map((id) => `fill-${id}`) }).length) { closeArea(); go(''); }
+    if (!map.queryRenderedFeatures(e.point, { layers: FILLS }).length) { closeArea(); go(''); }
   });
 
   for (const cfg of CONFIG.datasets) {
     const ds = await loadDataset(cfg);
     state.datasets.push(ds);
-    await applyData(ds);
+    applyData(ds);
   }
+  buildDatasetControls();
   const first = state.datasets[0];
-  if (first) { buildMeasureList(first); setActive(first, first.measures[0]); }
-  $('count').textContent = first ? `${fmt(first.byCode.size)} areas with data` : 'No datasets loaded';
+  if (first) setActive(first, first.measures[0]);
+  const onMap = first ? first.byCode.size - Object.values(first.unmapped).reduce((s, n) => s + n, 0) : 0;
+  $('count').textContent = first ? `${fmt(onMap)} areas on the map` : 'No datasets loaded';
+  await underlay;
   showProblems();
   if (location.hash) route();
 }
