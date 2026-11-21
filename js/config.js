@@ -140,7 +140,7 @@ export default {
       measures: [
         { id: 'lad', label: 'Local authorities', kind: 'rate', value: 'lad rate', rank: null, areas: ['lad'],
           counts: ['fuel poor households', 'households'], names: { E: 'Households in fuel poverty', S: 'Households in fuel poverty' } },
-        { id: 'lsoa', label: 'LSOAs (finer, less reliable)', kind: 'rate', value: 'lsoa rate', rank: null, areas: ['lsoa'],
+        { id: 'lsoa', label: 'LSOAs', kind: 'rate', value: 'lsoa rate', rank: null, areas: ['lsoa'],
           counts: ['fuel poor households', 'households'], names: { E: 'Households in fuel poverty' },
           caution: 'LSOA figures are modelled estimates: use them to spot general patterns and very high or low areas, not to rank or compare individual LSOAs.' },
       ],
@@ -173,7 +173,7 @@ export default {
         { id: 'co2', label: 'Median CO₂ emissions', kind: 'rate', value: 'epc co2', rank: null, areas: ['lsoa', 'dz'], decimals: 1,
           counts: ['epc count', 'epc homes'],
           names: { E: 'Median CO₂ (tonnes a year)', W: 'Median CO₂ (tonnes a year)', S: 'Median CO₂ (tonnes a year)' },
-          classes: { breaks: [2.5, 3, 3.5, 4, 4.5], colours: ['#ffffb2', '#fed976', '#feb24c', '#fd8d3c', '#f03b20', '#bd0026'], unit: ' t' } },
+          classes: { breaks: [2.5, 3, 3.5, 4, 4.5], colours: ['#006837', '#31a354', '#78c679', '#addd8e', '#d9f0a3', '#ffffe5'], unit: ' t' } },
       ],
     },
   ],

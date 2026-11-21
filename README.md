@@ -87,12 +87,13 @@ nation only.
 
 ## PDF export
 
-The "Export PDF" group in the control panel saves the map as a vector PDF (areas, outlines, title, legend, scale bar, north arrow and credits are paths and text, so they stay sharp at any size). Choose the current view or the whole UK, and a page size in millimetres.
+The "Export PDF" group in the control panel saves the map as a vector PDF (areas, outlines, legend, scale bar, compass and credits are paths and text, so they stay sharp at any size). Choose the current view or the whole UK, a paper size (A4 to A0) and landscape or portrait.
 
 - The shapes are read back from the map at the zoom being exported and simplified lightly, so the PDF matches the screen. Detail follows the window size: a larger window gives a more detailed PDF.
+- Furniture is a fixed physical size on any paper: legend 100 mm wide (bottom left), compass 10 mm across with the scale bar beside it (bottom right), credits in one line underneath (shrunk to fit the page width). Outline weights are the live map's, in points, whatever the paper.
 - The base map is a picture (place names a separate transparent picture above the data), because it is drawn from tiles.
-- `js/pdf.js` is a small PDF writer (one page, Helvetica, opacity, images); `js/export.js` turns the map into a page.
-- Not included: the Doto title face (Helvetica is used), and the selected-area highlight.
+- `js/pdf.js` is a small PDF writer (one page, Helvetica, opacity, images); `js/export.js` turns the map into a page; `js/scalebar.js` is the stepped scale bar shared with the live map.
+- Not included: the Doto face (Helvetica is used) and the selected-area highlight.
 
 ## Addresses
 

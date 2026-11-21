@@ -5,6 +5,7 @@ const CONFIG = (await import(`./config.js${q}`)).default;
 const { createCore } = await import(`./core.js${q}`);
 const Styles = await import(`./styles.js${q}`);
 
+const { scaleModel, thinLabels } = await import(`./scalebar.js${q}`);
 const core = createCore(CONFIG);
 const { state, esc, fail, problem, resolveColumns, loadCSV } = core;
 state.selected = null;       // the open area's code, e.g. E01000001
@@ -273,6 +274,29 @@ function paintMap() {
     // A dataset switched off is made fully transparent (not hidden), so areas can still be clicked.
     map.setPaintProperty(id, 'fill-opacity', ds && ds.visible ? ds.opacity : 0);
   }
+}
+
+// Scale bar: the stepped bar of js/scalebar.js, redrawn whenever the map moves. Its last block is the "nice" length
+// that fits in up to 140 px; the full bar is 2.5 times that.
+function scaleControl() {
+  const el = Object.assign(document.createElement('div'), { className: 'maplibregl-ctrl scalebar' });
+  const NS = 'http://www.w3.org/2000/svg', H = 8;
+  const draw = () => {
+    const lat = map.getCenter().lat, mpp = (40075016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** map.getZoom());
+    const sm = scaleModel(140 * mpp), len = sm.total / mpp;
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', len); svg.setAttribute('height', H + 16);
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', sm.path.map(([m, lv], i) => `${i ? 'L' : 'M'}${(m / mpp).toFixed(2)} ${(lv ? H + 15.5 : 15.5)}`).join(' '));
+    svg.append(path);
+    for (const lb of thinLabels(sm.labels, 1 / mpp, (t) => t.length * 6.3, 4)) {
+      const t = document.createElementNS(NS, 'text');
+      t.setAttribute('x', (lb.at / mpp).toFixed(2)); t.setAttribute('y', 11); t.textContent = lb.text;
+      svg.append(t);
+    }
+    el.replaceChildren(svg);
+  };
+  return { onAdd() { map.on('move', draw); draw(); return el; }, onRemove() { map.off('move', draw); el.remove(); } };
 }
 
 function setActive(ds, measure) {
@@ -604,7 +628,7 @@ async function start() {
   // Bottom corners stack the latest control on top, so the credits go in first to sit below the zoom buttons.
   map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: CONFIG.attribution }), 'bottom-right');
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-  map.addControl(new maplibregl.ScaleControl({ maxWidth: 140, unit: 'metric' }), 'bottom-left');
+  map.addControl(scaleControl(), 'bottom-left');
   // Start with the credits folded into their ⓘ button (MapLibre opens them on wide screens).
   map.once('idle', () => document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'));
   buildBaseControls();
@@ -659,7 +683,8 @@ function setBusy(on, text) {
   box.textContent = text ?? '';
 }
 function applyAll() { applyUnderlay(); applyOutlines(); paintMap(); }
-const exporter = (await import(`./export.js${q}`)).createExporter({ map, state, CONFIG, AREA_SETS, OUTLINES, legendModel, featureColour, applyAll, setBusy });
+const { createExporter, PAPER_MM } = await import(`./export.js${q}`);
+const exporter = createExporter({ map, state, CONFIG, AREA_SETS, OUTLINES, legendModel, featureColour, applyAll, setBusy });
 async function exportPdf(opts) {
   const { blob, areas } = await exporter.exportPdf(opts);
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${(CONFIG.title ?? 'map').toLowerCase().replace(/\W+/g, '-')}.pdf` });
@@ -677,8 +702,9 @@ function buildExportControls() {
   inner.append(
     field('<label><input type="radio" name="exp-mode" value="view" checked><span>Current view</span></label>'),
     field('<label><input type="radio" name="exp-mode" value="uk"><span>Whole UK</span></label>'),
-    field('<label>Page <input id="exp-w" type="number" min="50" max="2000" value="297"> × <input id="exp-h" type="number" min="50" max="2000" value="210"> mm</label>'),
-    ...[['title', 'Title'], ['legend', 'Legend'], ['scale', 'Scale bar'], ['north', 'North arrow'], ['basemap', 'Base map']]
+    field('<label>Paper <select id="exp-paper">' + Object.keys(PAPER_MM).map((p) => `<option${p === 'A3' ? ' selected' : ''}>${p}</option>`).join('') +
+      '</select> <select id="exp-orient"><option value="landscape">landscape</option><option value="portrait">portrait</option></select></label>'),
+    ...[['legend', 'Legend'], ['scale', 'Scale bar'], ['north', 'Compass'], ['basemap', 'Base map']]
       .map(([id, t]) => field(`<label><input type="checkbox" id="exp-${id}" checked><span>${t}</span></label>`)),
   );
   const btn = Object.assign(document.createElement('button'), { type: 'button', textContent: 'Export PDF', className: 'export-btn' });
@@ -688,8 +714,8 @@ function buildExportControls() {
     btn.disabled = true; status.textContent = '';
     try {
       const r = await exportPdf({ mode: document.querySelector('input[name=exp-mode]:checked').value,
-        widthMm: Math.min(2000, Math.max(50, Number(g('w').value) || 297)), heightMm: Math.min(2000, Math.max(50, Number(g('h').value) || 210)),
-        title: g('title').checked, legend: g('legend').checked, scale: g('scale').checked, north: g('north').checked, basemap: g('basemap').checked });
+        ...(() => { const [a, b] = PAPER_MM[g('paper').value]; return g('orient').value === 'portrait' ? { widthMm: a, heightMm: b } : { widthMm: b, heightMm: a }; })(),
+        legend: g('legend').checked, scale: g('scale').checked, north: g('north').checked, basemap: g('basemap').checked });
       status.textContent = `Saved (${fmt(r.areas)} areas, ${(r.blob.size / 1e6).toFixed(1)} MB).`;
     } catch (e) { status.textContent = `The PDF could not be made: ${e.message}`; console.error(e); }
     btn.disabled = false;

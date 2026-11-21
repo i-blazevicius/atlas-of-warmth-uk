@@ -149,7 +149,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .legend-note { margin: 8px 0 0; max-width: 250px; color: var(--ink-faint); font-size: 11px; line-height: 1.35; }
 /* MapLibre's own controls, in the same square, thin-bordered style as the panels */
 .maplibregl-ctrl-bottom-left { left: 38px; }
-.maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale { margin: 0 0 10px 0; }
+.maplibregl-ctrl-bottom-left .scalebar { margin: 0 0 10px 0; }
 .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 0 12px 10px 0; }
 .maplibregl-ctrl-group, .maplibregl-ctrl-group:not(:empty), .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact {
   border-radius: 0; box-shadow: none;
@@ -171,19 +171,19 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button:focus, .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button:focus-visible { box-shadow: none; outline: none; }
 .maplibregl-ctrl-attrib.maplibregl-compact::after { display: none; }
 .maplibregl-ctrl-attrib { font-family: var(--font-ui); font-size: 11px; color: var(--ink-dim); }
-.maplibregl-ctrl-scale {
-  height: var(--furniture-h); line-height: calc(var(--furniture-h) - 1px); padding: 0 5px;
-  background: var(--panel-bg); color: var(--ink); border-color: var(--ink); border-width: 0 1px 1px; border-radius: 0; font-family: var(--font-ui);
-}
+.scalebar { background: var(--panel-bg); padding: 2px 30px 0 8px; font-family: var(--font-ui); font-size: 11px; color: var(--ink); }
+.scalebar svg { display: block; overflow: visible; }
+.scalebar text { fill: var(--ink); font: 11px var(--font-ui); text-anchor: middle; }
+.scalebar path { fill: none; stroke: var(--ink); stroke-width: 1px; }
 
 /* Opacity sliders: a thin 2px line (filled in the accent colour up to the handle), a thicker upright handle */
 input[type="range"] { -webkit-appearance: none; appearance: none; height: 18px; margin: 0; padding: 0; background: transparent; cursor: pointer; --p: 100%; }
 input[type="range"]:focus { outline: none; }
 input[type="range"]:focus-visible { outline: 1px dotted var(--ink-faint); outline-offset: 2px; }
-input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: linear-gradient(to right, var(--accent) var(--p), #888 var(--p)); border: 0; }
+input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: linear-gradient(to right, #a50f15 var(--p), #888 var(--p)); border: 0; }
 input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 5px; height: 18px; margin-top: -8px; background: var(--ink); border: 0; border-radius: 0; }
 input[type="range"]::-moz-range-track { height: 2px; background: #888; border: 0; }
-input[type="range"]::-moz-range-progress { height: 2px; background: var(--accent); }
+input[type="range"]::-moz-range-progress { height: 2px; background: #a50f15; }
 input[type="range"]::-moz-range-thumb { width: 5px; height: 18px; background: var(--ink); border: 0; border-radius: 0; }
 
 /* Indicators behind a domain: open by clicking the decile block or name */
