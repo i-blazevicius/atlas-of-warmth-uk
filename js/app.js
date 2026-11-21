@@ -263,6 +263,10 @@ function paintMap() {
   for (const a of AREA_SETS) {
     const show = measure?.areas ? measure.areas.includes(a.id) : !a.optional;
     for (const id of [`fill-${a.id}`, `line-${a.id}`, `selected-${a.id}`]) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', show ? 'visible' : 'none');
+    // `where: { lad: ['N'] }` draws only the areas of those nations (the first letter of the code) from a set that covers more.
+    const only = measure?.where?.[a.id];
+    const filter = only ? ['in', ['slice', ['get', a.code], 0, 1], ['literal', only]] : null;
+    for (const id of [`fill-${a.id}`, `line-${a.id}`]) if (map.getLayer(id)) map.setFilter(id, filter);
   }
   for (const id of FILLS) {
     map.setPaintProperty(id, 'fill-color', ds ? fillExpression(ds, measure) : NO_DATA);
@@ -378,10 +382,15 @@ function renderLegend() {
   let rows;
   if (measure.kind === 'rate') {
     const cl = classesOf(ds, measure), unit = measure.unit ?? cl.unit ?? '';
-    // One column of class edges, or one per nation when the edges differ.
-    const cols = Array.isArray(cl.breaks) ? [{ br: cl.breaks }] : Object.keys(NATIONS).filter((n) => measure.names?.[n] && cl.breaks[n]).map((n) => ({ n, br: cl.breaks[n] }));
+    // One column of class edges, or one per nation when the edges differ (nations with the same edges share a column).
+    const cols = [];
+    if (Array.isArray(cl.breaks)) cols.push({ label: '', br: cl.breaks });
+    else for (const n of Object.keys(NATIONS).filter((n) => measure.names?.[n] && cl.breaks[n])) {
+      const same = cols.find((c) => JSON.stringify(c.br) === JSON.stringify(cl.breaks[n]));
+      if (same) same.label += `, ${NATIONS[n]}`; else cols.push({ label: NATIONS[n], br: cl.breaks[n] });
+    }
     const edge = (br, i) => (i === 0 ? `< ${br[0]}${unit}` : i === br.length ? `> ${br[i - 1]}${unit}` : `${br[i - 1]}–${br[i]}${unit}`);
-    rows = (cols.length > 1 ? `<div class="legend-row legend-head"><i></i>${cols.map((c) => NATIONS[c.n]).join(' · ')}</div>` : '') +
+    rows = (cols.length > 1 ? `<div class="legend-row legend-head"><i></i>${cols.map((c) => c.label).join(' · ')}</div>` : '') +
       cl.colours.map((c, i) => `<div class="legend-row"><i style="background:${esc(c)}"></i>${cols.map((k) => edge(k.br, i)).join(' · ')}</div>`).join('');
   } else {
     rows = RAMP.map((c, i) => `<div class="legend-row"><i style="background:${c}"></i>${label(i + 1)}</div>`).join('');
@@ -422,7 +431,10 @@ function openArea(code) {
         ? `Rank ${fmt(rk)}${total ? ` of ${fmt(total)} in ${NATIONS[nation] ?? nation}` : ''} (1 = most deprived)` : '';
       if (rate && has) {
         const [a, b] = (m.counts ?? []).map((c) => Number(g(`c:${c}`)));
-        tip = `${v.toFixed(1)}${m.unit ?? classesOf(ds, m).unit ?? ''}${Number.isFinite(a) && Number.isFinite(b) && b ? ` of households: ${fmt(a)} of ${fmt(b)}` : ''}`;
+        const u = m.unit ?? classesOf(ds, m).unit ?? '', dp = u === '%' ? 1 : m.decimals ?? 0;
+        tip = m.counts?.[0] === 'epc count'
+          ? `${v.toFixed(dp)}${u}${Number.isFinite(a) ? ` (from ${fmt(a)} certificates${Number.isFinite(b) && b ? `, ${Math.round(a / b * 100)}% of homes have one` : ''})` : ''}`
+          : `${v.toFixed(dp)}${u}${Number.isFinite(a) && Number.isFinite(b) && b ? ` of households: ${fmt(a)} of ${fmt(b)}` : ''}`;
       }
       const key = `${ds.id}:${m.id}`;
       const expandable = !!m.indicators?.includes(nation) && !!ds.indicatorsDir;
