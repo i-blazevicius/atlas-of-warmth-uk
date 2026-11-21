@@ -50,7 +50,7 @@ body { font-family: var(--font-body); font-weight: var(--weight-body); font-styl
   position: relative; width: var(--panel-width);
   background: var(--panel-bg); border: 1px solid var(--panel-line); border-radius: var(--radius);
 }
-.panel { position: absolute; z-index: 2; top: 12px; right: 12px; padding: 14px 16px; max-height: calc(100% - 24px); overflow: auto; }
+.panel { position: absolute; z-index: 2; top: 12px; right: 12px; padding: 14px 16px; max-height: calc(100% - 132px); overflow: auto; }   /* leaves the zoom buttons and credits free */
 
 /* Foldable panels, top left and bottom left, the same width. Click the heading to fold. */
 .dock-top { flex: 0 1 auto; min-height: 44px; overflow: auto; }
@@ -182,3 +182,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance
 input[type="range"]::-moz-range-track { height: 2px; background: #888; border: 0; }
 input[type="range"]::-moz-range-progress { height: 2px; background: var(--accent); }
 input[type="range"]::-moz-range-thumb { width: 5px; height: 18px; background: var(--ink); border: 0; border-radius: 0; }
+
+/* Indicators behind a domain: open by clicking the decile block or name */
+.panel-measure.expandable { cursor: pointer; }
+.panel-measure.expandable:focus-visible { outline: 1px dotted var(--ink-faint); outline-offset: 1px; }
+.panel-measure .name { flex: 1; }
+.panel-measure .caret::before { content: '▸'; color: var(--ink-faint); }
+.panel-measure.open .caret::before { content: '▾'; }
+.indicators { margin: 2px 0 8px 46px; padding-left: 10px; border-left: 1px solid var(--panel-line); }
+.indicator { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 4px 0; font-size: 12px; line-height: 1.3; }
+.indicator + .indicator { border-top: 1px solid var(--panel-line); }
+.ind-value { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ind-value small, .ind-median { color: var(--ink-faint); }
+.ind-median { display: block; font-size: 10.5px; }
+.ind-none { color: var(--ink-faint); }
+.ind-note { margin: 4px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.35; }

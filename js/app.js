@@ -370,9 +370,14 @@ function openArea(code) {
       const total = ds.totals?.[nation];
       const tip = g(`r:${m.id}`) !== '' && Number.isFinite(rk)
         ? `Rank ${fmt(rk)}${total ? ` of ${fmt(total)} in ${NATIONS[nation] ?? nation}` : ''} (1 = most deprived)` : '';
-      html += `<div class="panel-measure${cur ? ' current' : ''}"${tip ? ` data-tip="${esc(tip)}"` : ''}>` +
+      const key = `${ds.id}:${m.id}`;
+      const expandable = !!m.indicators?.includes(nation) && !!ds.indicatorsDir;
+      const open = expandable && state.expanded.has(key);
+      html += `<div class="panel-measure${cur ? ' current' : ''}${expandable ? ' expandable' : ''}${open ? ' open' : ''}"${tip ? ` data-tip="${esc(tip)}"` : ''}` +
+        (expandable ? ` data-key="${esc(key)}" data-ds="${esc(ds.id)}" data-m="${esc(m.id)}" data-nation="${esc(nation)}" role="button" tabindex="0" aria-expanded="${open}"` : '') + '>' +
         `<span class="block${has ? '' : ' none'}" style="background:${esc(colour)};color:${has ? textOn(colour) : 'inherit'}">${has ? v : '–'}</span>` +
-        `<span class="name">${esc(m.names?.[nation] ?? m.label)}</span></div>`;
+        `<span class="name">${esc(m.names?.[nation] ?? m.label)}</span>${expandable ? '<span class="caret" aria-hidden="true"></span>' : ''}</div>` +
+        (open ? '<div class="indicators"></div>' : '');
     }
     const pr = ds.parentRanks?.rows.get(g('pcode'));
     const m0 = state.active?.dataset === ds ? state.active.measure : ds.measures[0];
@@ -384,7 +389,78 @@ function openArea(code) {
   });
   $('panel-body').innerHTML = html;
   $('panel').hidden = false;
+  for (const head of $('panel-body').querySelectorAll('.panel-measure.open')) fillIndicators(head);   // domains left open stay open
 }
+
+// ── Indicators behind a domain ─────────────────────────────
+// Click a domain's decile block or name to open the indicators it is calculated from. They are read only then:
+// data/indicators/index.json once, and one small CSV per nation and domain (tools/build_indicators.py).
+state.expanded = new Set();
+const indicatorFiles = new Map();                 // "E-crime" → promise of { meta, rows: Map(code → row) }
+let indicatorIndex = null;
+function loadIndicators(dsCfg, nation, measure) {
+  const k = `${nation}-${measure}`;
+  if (!indicatorFiles.has(k)) {
+    indicatorFiles.set(k, (async () => {
+      indicatorIndex ??= (async () => {
+        const res = await fetch(`${dsCfg.indicatorsDir}index.json`);
+        if (!res.ok) throw new Error(`index.json answered ${res.status}`);
+        return res.json();
+      })();
+      const meta = (await indicatorIndex)[nation]?.[measure];
+      if (!meta) throw new Error(`no indicators listed for ${k}`);
+      const { rows } = await loadCSV(`${dsCfg.indicatorsDir}${meta.file}`, `the ${k} indicators`);
+      return { meta: meta.indicators, rows: new Map(rows.map((r) => [r.code, r])) };
+    })());
+    indicatorFiles.get(k).catch(() => indicatorFiles.delete(k));       // allow a retry
+  }
+  return indicatorFiles.get(k);
+}
+function fmtVal(x) {
+  const a = Math.abs(x);
+  return x.toLocaleString('en-GB', { maximumFractionDigits: a >= 1000 ? 0 : a >= 100 ? 1 : a >= 10 ? 1 : 2 });
+}
+async function fillIndicators(head) {
+  const box = head.nextElementSibling;
+  if (!box?.classList.contains('indicators')) return;
+  const code = state.selected;
+  const ds = state.datasets.find((d) => d.id === head.dataset.ds);
+  box.innerHTML = '<p class="ind-note">Loading…</p>';
+  try {
+    const { meta, rows } = await loadIndicators(ds, head.dataset.nation, head.dataset.m);
+    if (!box.isConnected || state.selected !== code) return;            // another area was opened meanwhile
+    const row = rows.get(code);
+    const median = `median for ${NATIONS[head.dataset.nation] ?? head.dataset.nation}`;
+    box.innerHTML = row ? meta.map((m) => {
+      const v = row[m.id] === '' || row[m.id] == null ? NaN : Number(row[m.id]);
+      const unit = m.unit ? ` <small>${esc(m.unit)}</small>` : '';
+      return `<div class="indicator"><span class="ind-label">${esc(m.label)}</span>` +
+        `<span class="ind-value">${Number.isFinite(v) ? `<b>${fmtVal(v)}</b>${unit}` : '<span class="ind-none">no data</span>'}` +
+        `<small class="ind-median">${esc(median)} ${fmtVal(m.median)}</small></span></div>`;
+    }).join('') + '<p class="ind-note">Raw indicator values, not ranks. Medians are across the nation’s areas.</p>'
+      : '<p class="ind-note">No indicator values for this area.</p>';
+  } catch (e) {
+    box.innerHTML = '<p class="ind-note">The indicators could not be loaded.</p>';
+    problem(`Indicators: ${e.message}`);
+  }
+}
+function toggleIndicators(head) {
+  const key = head.dataset.key;
+  const open = !state.expanded.has(key);
+  if (open) state.expanded.add(key); else state.expanded.delete(key);
+  head.classList.toggle('open', open);
+  head.setAttribute('aria-expanded', String(open));
+  if (open) {
+    const box = Object.assign(document.createElement('div'), { className: 'indicators' });
+    head.after(box);
+    fillIndicators(head);
+  } else if (head.nextElementSibling?.classList.contains('indicators')) head.nextElementSibling.remove();
+}
+$('panel-body').addEventListener('click', (e) => { const h = e.target.closest('.panel-measure.expandable'); if (h) toggleIndicators(h); });
+$('panel-body').addEventListener('keydown', (e) => {
+  const h = e.target.closest?.('.panel-measure.expandable');
+  if (h && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleIndicators(h); }
+});
 function closeArea() {
   state.selected = null;
   for (const a of AREA_SETS) if (map.getLayer(`selected-${a.id}`)) map.setFilter(`selected-${a.id}`, ['==', ['get', a.code], '']);
