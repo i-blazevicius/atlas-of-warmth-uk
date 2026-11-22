@@ -19,7 +19,7 @@ on:
       - "tools/fetch_osm_community_centres.py"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   fetch:
@@ -38,6 +38,18 @@ jobs:
             --end "${{ inputs.end || '2025' }}"
           wc -l source/osm/*.jsonl
           ls -lh source/osm/
+      - name: Keep a compressed copy on a throwaway branch
+        run: |
+          mkdir -p /tmp/keep && gzip -9 -k source/osm/*.jsonl && cp source/osm/*.jsonl.gz /tmp/keep/
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan workflow-data-osm
+          git rm -rf --cached -q . || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/keep/* .
+          git add ./*.gz
+          git commit -q -m "OSM community-centre snapshots (workflow output)"
+          git push --force origin workflow-data-osm
       - uses: actions/upload-artifact@v4
         with:
           name: osm-community-centres

@@ -11,7 +11,7 @@ on:
       - "tools/fetch_nomis_business_counts.py"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   fetch:
@@ -25,6 +25,18 @@ jobs:
       - run: pip install requests
       - run: python tools/fetch_nomis_business_counts.py --years 2010-2026
       - run: wc -l source/nomis/*.csv && head -5 source/nomis/*.csv
+      - name: Keep a compressed copy on a throwaway branch
+        run: |
+          mkdir -p /tmp/keep && gzip -9 -k source/nomis/*.csv && cp source/nomis/*.csv.gz /tmp/keep/
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan workflow-data-nomis
+          git rm -rf --cached -q . || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/keep/* .
+          git add ./*.gz
+          git commit -q -m "Nomis business counts (workflow output)"
+          git push --force origin workflow-data-nomis
       - uses: actions/upload-artifact@v4
         with:
           name: nomis-business-counts
