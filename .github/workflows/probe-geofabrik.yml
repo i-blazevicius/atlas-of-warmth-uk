@@ -7,12 +7,18 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Headers and a short GET
+      - name: ohsome snapshot centroids, UK bbox, 2015-01-01
         run: |
-          u=https://download.geofabrik.de/europe/ireland-and-northern-ireland-150101.osm.pbf
-          curl -sIL -m 30 "$u"
-          echo ---- GET
-          curl -sL -m 30 -o /tmp/x.pbf -D - -w "bytes=%{size_download} code=%{http_code} url=%{url_effective} time=%{time_total}\n" "$u" | head -40
-          ls -l /tmp/x.pbf; head -c 300 /tmp/x.pbf | strings | head -5
+          F='(amenity in (community_centre, social_centre)) or (disused:amenity in (community_centre, social_centre)) or (was:amenity in (community_centre, social_centre)) or (abandoned:amenity in (community_centre, social_centre))'
+          for ep in elements/count elements/centroid; do
+            echo "== $ep"
+            curl -s -m 240 -o /tmp/out.json -w "code=%{http_code} bytes=%{size_download} time=%{time_total}\n" \
+              -X POST "https://api.ohsome.org/v1/$ep" \
+              --data-urlencode "bboxes=-8.7,49.8,2.0,60.9" \
+              --data-urlencode "time=2015-01-01" \
+              --data-urlencode "filter=$F" \
+              --data-urlencode "properties=tags"
+            head -c 400 /tmp/out.json; echo
+          done
