@@ -25,6 +25,12 @@ jobs:
       - run: pip install requests
       - run: python tools/fetch_nomis_business_counts.py --years 2010-2026
       - run: wc -l source/nomis/*.csv && head -5 source/nomis/*.csv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nomis-business-counts
+          path: source/nomis/*.csv
+          retention-days: 30
+          if-no-files-found: error
       - name: Keep a compressed copy on a throwaway branch
         run: |
           mkdir -p /tmp/keep && gzip -9 -k source/nomis/*.csv && cp source/nomis/*.csv.gz /tmp/keep/
@@ -37,9 +43,3 @@ jobs:
           git add ./*.gz
           git commit -q -m "Nomis business counts (workflow output)"
           git push --force origin workflow-data-nomis
-      - uses: actions/upload-artifact@v4
-        with:
-          name: nomis-business-counts
-          path: source/nomis/*.csv
-          retention-days: 30
-          if-no-files-found: error

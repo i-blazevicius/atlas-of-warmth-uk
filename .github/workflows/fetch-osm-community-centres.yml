@@ -38,6 +38,12 @@ jobs:
             --end "${{ inputs.end || '2025' }}"
           wc -l source/osm/*.jsonl
           ls -lh source/osm/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osm-community-centres
+          path: source/osm/*.jsonl
+          retention-days: 30
+          if-no-files-found: error
       - name: Keep a compressed copy on a throwaway branch
         run: |
           mkdir -p /tmp/keep && gzip -9 -k source/osm/*.jsonl && cp source/osm/*.jsonl.gz /tmp/keep/
@@ -50,9 +56,3 @@ jobs:
           git add ./*.gz
           git commit -q -m "OSM community-centre snapshots (workflow output)"
           git push --force origin workflow-data-osm
-      - uses: actions/upload-artifact@v4
-        with:
-          name: osm-community-centres
-          path: source/osm/*.jsonl
-          retention-days: 30
-          if-no-files-found: error
