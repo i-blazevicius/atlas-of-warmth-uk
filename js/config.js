@@ -7,7 +7,7 @@
 export default {
 
   // Working title (the repository's name). Shown in the control panel and the browser tab.
-  title: 'Portrait of a Nation',
+  title: 'Atlas of Warmth UK',
 
   data: {
     styles: 'data/styles.json',

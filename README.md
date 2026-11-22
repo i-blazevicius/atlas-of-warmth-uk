@@ -1,4 +1,4 @@
-# Portrait of a Nation
+# Atlas of Warmth UK
 
 Interactive map of the UK for visualising data: switch between datasets, colour the areas, click an
 area to see its local information. A static site (GitHub Pages), no build step on the page, no paid services.
