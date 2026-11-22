@@ -4,8 +4,7 @@ Step 1.2a: UK Business Counts (Nomis dataset NM_141_1, local units) for the cate
 that stand for community life: pubs, religious organisations, other membership
 organisations, libraries and sports clubs. One tidy row per area, year and industry.
 
-Nomis serves every year on the current area geography, so the same 2021 MSOAs hold the
-counts for 2015 and 2025 and no crosswalk is needed. Scottish intermediate zones are
+Small-area counts are on 2011 MSOAs up to 2024 and on 2021 MSOAs from 2025 (figures are rounded to 5). Scottish intermediate zones are
 fetched too. There is no small-area Northern Ireland data in this dataset.
 
 Usage (from the repo root):
@@ -37,7 +36,9 @@ INDUSTRIES = {
     "libraries": ("91011", "134308739"),
     "sport_clubs": ("93120", "134310848"),
 }
-AREA_TYPES = {"TYPE152": "msoa21", "TYPE317": "iz_scotland"}
+AREA_TYPES = {"TYPE152": "msoa21", "TYPE297": "msoa11", "TYPE317": "iz_scotland"}
+# Nomis holds small-area industry counts for 2021 MSOAs only from 2025; earlier years are on 2011 MSOAs.
+YEAR_RANGE = {"msoa21": (2025, 9999), "msoa11": (0, 2024)}
 
 
 def fetch(geography: str, industry_id: str, year: int, retries: int = 4) -> str:
@@ -81,6 +82,9 @@ def main():
         for geog, label in AREA_TYPES.items():
             for name, (sic, nid) in INDUSTRIES.items():
                 for year in years:
+                    lo, hi = YEAR_RANGE.get(label, (0, 9999))
+                    if not lo <= year <= hi:
+                        continue
                     text = fetch(geog, nid, year)
                     rows = list(csv.DictReader(io.StringIO(text)))
                     for r in rows:
