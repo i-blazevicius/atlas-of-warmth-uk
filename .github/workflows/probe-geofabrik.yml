@@ -11,10 +11,10 @@ jobs:
     steps:
       - name: Head requests for dated snapshots
         run: |
-          for y in 14 15 16 17 18 19 20 21 22 23 24 25 26; do
+          for y in 15 20 25; do
             for r in europe/great-britain europe/ireland-and-northern-ireland; do
               u="https://download.geofabrik.de/${r}-${y}0101.osm.pbf"
-              echo "$u $(curl -sI -m 30 "$u" | head -1 | tr -d '\r') $(curl -sI -m 30 "$u" | grep -i '^content-length' | tr -d '\r')"
+              echo "$u $(curl -sIL -m 30 "$u" | grep -E "^HTTP|^location" | tr "\n" " " | tr -d '\r') $(curl -sIL -m 30 "$u" | grep -i "^content-length" | tail -1 | tr -d "\r")"
             done
           done
       - name: Overpass status
