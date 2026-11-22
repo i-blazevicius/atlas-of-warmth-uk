@@ -1,0 +1,21 @@
+name: Probe Geofabrik historic extracts
+on:
+  workflow_dispatch:
+  push:
+    branches: [community-closures-data]
+    paths: [".github/workflows/probe-geofabrik.yml"]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Head requests for dated snapshots
+        run: |
+          for y in 14 15 16 17 18 19 20 21 22 23 24 25 26; do
+            for r in europe/great-britain europe/ireland-and-northern-ireland; do
+              u="https://download.geofabrik.de/${r}-${y}0101.osm.pbf"
+              echo "$u $(curl -sI -m 30 "$u" | head -1 | tr -d '\r') $(curl -sI -m 30 "$u" | grep -i '^content-length' | tr -d '\r')"
+            done
+          done
+      - name: Overpass status
+        run: curl -s -m 30 https://overpass-api.de/api/status | head -12
