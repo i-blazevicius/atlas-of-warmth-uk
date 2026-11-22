@@ -6,12 +6,9 @@ name: Fetch OSM community centres
 on:
   workflow_dispatch:
     inputs:
-      start:
-        description: "First year"
-        default: "2015"
-      end:
-        description: "Last year"
-        default: "2025"
+      years:
+        description: "Comma-separated years (1 January snapshots)"
+        default: "2015,2020,2025"
   push:
     branches: [community-closures-data]
     paths:
@@ -34,8 +31,7 @@ jobs:
       - name: Download OSM snapshots
         run: |
           python tools/fetch_osm_community_centres.py \
-            --start "${{ inputs.start || '2015' }}" \
-            --end "${{ inputs.end || '2025' }}"
+            --years "${{ inputs.years || '2015,2020,2025' }}"
           wc -l source/osm/*.jsonl
           ls -lh source/osm/
       - uses: actions/upload-artifact@v4
