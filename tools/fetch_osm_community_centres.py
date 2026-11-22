@@ -61,7 +61,7 @@ def main():
                 filt = tmp / "filtered.osm.pbf"
                 gj = tmp / "filtered.geojsonseq"
                 run(["osmium", "tags-filter", "--overwrite", "-o", str(filt), str(src), *FILTERS])
-                run(["osmium", "export", "--overwrite", "-f", "geojsonseq", "-o", str(gj), str(filt)])
+                run(["osmium", "export", "--overwrite", "--add-unique-id=type_id", "-f", "geojsonseq", "-o", str(gj), str(filt)])
                 src.unlink()
                 with gj.open(encoding="utf-8") as g:
                     for line in g:
@@ -69,14 +69,17 @@ def main():
                         if not line:
                             continue
                         f = json.loads(line)
-                        tags = f.get("properties") or {}
+                        tags = dict(f.get("properties") or {})
+                        oid = str(tags.pop("@id", f.get("id", "")))
+                        if not oid:
+                            raise SystemExit("feature without an id: check osmium export options")
                         if not any(tags.get(k) in VALUES for k in KEYS):
                             continue
                         try:
                             p = shape(f["geometry"]).representative_point()
                         except Exception:
                             continue
-                        fh.write(json.dumps({"date": date, "osm_id": str(f.get("id", "")),
+                        fh.write(json.dumps({"date": date, "osm_id": oid,
                                              "lat": round(p.y, 6), "lon": round(p.x, 6),
                                              "tags": tags}, ensure_ascii=False) + "\n")
                         n_year += 1

@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        year: [2015, 2020, 2025]
+        year: [2015, 2018, 2020, 2022, 2025]
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
