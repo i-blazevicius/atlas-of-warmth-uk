@@ -4,6 +4,7 @@
 // is a drawing made of tiles, goes in as a picture (place names as a separate transparent picture above the data).
 import { Pdf, num, showText } from './pdf.js';
 import { scaleModel, thinLabels } from './scalebar.js';
+import { gridLayout } from './legendgrid.js';
 
 const MM = 72 / 25.4;                                   // points per millimetre
 const hexRgb = (hex) => {
@@ -301,26 +302,27 @@ export function createExporter(ctx) {
           const titleLines = lg.title.flatMap((t, i) => wrap(t, fs, inner).map((l) => ({ l, bold: i === 0 })));
           const headLines = lg.head ? wrap(lg.head, fs, inner) : [];
           const noteLines = lg.note ? wrap(lg.note, fs * 0.9, inner) : [];
-          // A comparison of two measures draws a 3 × 3 grid (10 mm cells) with its axis labels: the vertical one turned on its side.
-          const cs = 10 * MM, gf = fs * 0.9;
-          const yLines = lg.grid ? wrap(lg.grid.y, gf, 3 * cs) : [];
-          const gx = lx + pad + (yLines.length ? yLines.length * gf * 1.25 + fs * 0.4 : 0);
-          const xLines = lg.grid ? wrap(lg.grid.x, gf, bw - pad - (gx - lx)) : [];
-          const gridH = lg.grid ? 3 * cs + fs * 0.4 + xLines.length * gf * 1.25 + fs * 0.6 : 0;
+          // A comparison of two measures draws the grid legend of js/legendgrid.js (10 mm cells) in its own block.
+          const gl = lg.grid ? gridLayout(lg.grid, inner, 10 * MM, fs, measureText) : null;
+          const gridH = gl ? gl.h + fs * 0.6 : 0;
           const h = pad * 2 + gridH + titleLines.length * fs * 1.3 + headLines.length * fs * 1.3 + lg.rows.length * row + (noteLines.length ? fs * 0.6 + noteLines.length * fs * 1.15 : 0);
           const top = bottom - h;
           pdf.op(`1 1 1 rg ${line} RG 0.6 w ${num(lx)} ${num(H - top - h)} ${num(bw)} ${num(h)} re B`);
           let y = top + pad;
           for (const t of titleLines) { text(t.l, lx + pad, y, fs, { bold: t.bold }); y += fs * 1.3; }
           for (const l of headLines) { text(l, lx + pad, y, fs, { colour: faint }); y += fs * 1.3; }
-          if (lg.grid) {
-            lg.grid.colours.forEach((rowColours, ri) => rowColours.forEach((c, ci) =>
-              pdf.op(`${hexRgb(c)} rg ${line} RG 0.4 w ${num(gx + ci * cs)} ${num(H - y - (ri + 1) * cs)} ${num(cs)} ${num(cs)} re B`)));
-            yLines.forEach((l, i) => {
-              const w = measureText(l, gf);
-              pdf.op(`BT ${faint} rg /F1 ${num(gf)} Tf 0 1 -1 0 ${num(lx + pad + (i + 0.85) * gf * 1.25)} ${num(H - y - 3 * cs + (3 * cs - w) / 2)} Tm ${showText(l)} ET`);
-            });
-            xLines.forEach((l, i) => text(l, gx, y + 3 * cs + fs * 0.4 + i * gf * 1.25, gf, { colour: faint }));
+          if (gl) {
+            const ox = lx + pad;
+            for (const it of gl.items) {
+              if (it.type === 'rect') pdf.op(`${hexRgb(it.fill)} rg ${num(ox + it.x - 0.1)} ${num(H - y - it.y - it.h - 0.1)} ${num(it.w + 0.2)} ${num(it.h + 0.2)} re f`);
+              else if (it.type === 'line') pdf.op(`${faint} RG 0.5 w ${num(ox + it.x1)} ${num(H - y - it.y1)} m ${num(ox + it.x2)} ${num(H - y - it.y2)} l S`);
+              else if (it.type === 'tri') pdf.op(`${faint} rg ${it.pts.map(([px_, py_], i) => `${num(ox + px_)} ${num(H - y - py_)} ${i ? 'l' : 'm'}`).join(' ')} h f`);
+              else {
+                const w = measureText(it.text, it.size);
+                if (it.rot) pdf.op(`BT ${faint} rg /F1 ${num(it.size)} Tf 0 1 -1 0 ${num(ox + it.x)} ${num(H - y - it.y - w / 2)} Tm ${showText(it.text)} ET`);
+                else text(it.text, ox + it.x - (it.anchor === 'end' ? w : 0), y + it.y - it.size * 0.8, it.size, { colour: faint });
+              }
+            }
             y += gridH;
           }
           for (const r of lg.rows) {

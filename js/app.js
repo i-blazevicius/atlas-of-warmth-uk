@@ -6,6 +6,7 @@ const { createCore } = await import(`./core.js${q}`);
 const Styles = await import(`./styles.js${q}`);
 
 const { scaleModel, thinLabels } = await import(`./scalebar.js${q}`);
+const { gridLayout } = await import(`./legendgrid.js${q}`);
 const core = createCore(CONFIG);
 const { state, esc, fail, problem, resolveColumns, loadCSV } = core;
 state.hashCode = '';
@@ -347,13 +348,26 @@ function scaleControl() {
 }
 
 function setActive(ds, measure) {
-  if (state.bi) { state.bi.ds.visible = false; const on = $('bi-on'); if (on) on.checked = false; }
+  if (state.bi) state.bi.ds.visible = false;
+  for (const d of state.datasets) d.visible = d === ds;
+  ds.lastMeasure = measure;
   state.active = { dataset: ds, measure };
   paintMap();
   renderLegend();
   if (state.selected) openArea(state.selected);
   for (const input of document.querySelectorAll('input[data-measure]')) input.checked = input.dataset.ds === ds.id && input.value === measure.id;
+  syncModes();
   syncHash();
+}
+// Only one mode is live: its measures, selectors and opacity slider are active, the others greyed out and inactive.
+function syncModes() {
+  const act = state.active?.dataset;
+  for (const g of document.querySelectorAll('[data-mode]')) {
+    const on = g.dataset.mode === act?.id;
+    g.classList.toggle('off', !on);
+    g.querySelector('input[data-moderadio]').checked = on;
+    for (const el of g.querySelectorAll('.measures input, .measures select, .measures button, input[type="range"]')) el.disabled = !on;
+  }
 }
 
 // ── Compare two measures ───────────────────────────────────
@@ -378,9 +392,12 @@ function pairInfo(a, b) {
 const biAvailable = (a, b) => measureId(a) !== measureId(b) && pairInfo(a, b).n > 0;
 function makeBiMeasure(a, b) {
   const setsOf = (x) => x.m.areas ?? AREA_SETS.filter((s) => !s.optional).map((s) => s.id);
-  const areas = setsOf(a).filter((id) => setsOf(b).includes(id));
+  // Every ordinary area set either measure uses is drawn (grey where a value is missing); an optional set (local authorities)
+  // only when both use it.
+  const both = (id) => setsOf(a).includes(id) && setsOf(b).includes(id);
+  const areas = AREA_SETS.map((s) => s.id).filter((id) => (setsOf(a).includes(id) || setsOf(b).includes(id)) && (!AREA_SETS.find((s) => s.id === id).optional || both(id)));
   const where = {};
-  for (const id of areas) {
+  for (const id of areas.filter(both)) {
     const wa = a.m.where?.[id], wb = b.m.where?.[id];
     if (wa && wb) where[id] = wa.filter((n) => wb.includes(n)); else if (wa || wb) where[id] = wa ?? wb;
   }
@@ -390,12 +407,13 @@ function showBi() {
   const bi = state.bi;
   if (state.active?.dataset !== bi.ds) bi.prev = state.active;
   bi.ds.visible = true;
+  for (const d of state.datasets) d.visible = d === bi.a.ds || d === bi.b.ds;       // the click panel lists the two measures' datasets
   state.active = { dataset: bi.ds, measure: makeBiMeasure(bi.a, bi.b) };
   paintMap();
   renderLegend();
   if (state.selected) openArea(state.selected);
   for (const input of document.querySelectorAll('input[data-measure]')) input.checked = false;
-  const on = $('bi-on'); if (on) on.checked = true;
+  syncModes();
   syncHash();
 }
 function hideBi() {
@@ -423,11 +441,11 @@ function slider(value, onInput, label) {
 // A foldable group: a master checkbox, a title, an optional opacity slider, and a body that keeps its own
 // checkbox states while the master is off (they only show dimmed).
 function layerGroup({ label, checked, onMaster, sliderValue, onSlider, body }) {
-  const group = Object.assign(document.createElement('details'), { className: 'dataset', open: true });
+  const group = Object.assign(document.createElement('details'), { className: 'dataset', open: false });
   const sum = document.createElement('summary');
   const on = Object.assign(document.createElement('input'), { type: 'checkbox', checked });
   on.setAttribute('aria-label', `Show ${label}`);
-  const dim = () => group.classList.toggle('off', !on.checked);
+  const dim = () => { group.classList.toggle('off', !on.checked); for (const r of group.querySelectorAll('input[type="range"]')) r.disabled = !on.checked; };
   on.addEventListener('change', () => { dim(); onMaster(on.checked); });
   sum.append(on, Object.assign(document.createElement('span'), { className: 'dataset-label', textContent: label }));
   if (onSlider) sum.append(slider(sliderValue, onSlider, `${label} opacity`));
@@ -467,11 +485,13 @@ function buildDatasetControls() {
   const box = $('datasets');
   box.innerHTML = '';
   for (const ds of state.datasets) {
-    const group = Object.assign(document.createElement('details'), { className: 'dataset', open: true });
+    const group = Object.assign(document.createElement('details'), { className: 'dataset', open: false });
+    group.dataset.mode = ds.id;
     const sum = document.createElement('summary');
-    const on = Object.assign(document.createElement('input'), { type: 'checkbox', checked: ds.visible });
+    const on = Object.assign(document.createElement('input'), { type: 'radio', name: 'mode', checked: false });
+    on.dataset.moderadio = '1';
     on.setAttribute('aria-label', `Show ${ds.label}`);
-    on.addEventListener('change', () => { ds.visible = on.checked; paintMap(); renderLegend(); if (state.selected) openArea(state.selected); });
+    on.addEventListener('change', () => { if (on.checked) setActive(ds, ds.lastMeasure ?? ds.measures[0]); });
     sum.append(on, Object.assign(document.createElement('span'), { className: 'dataset-label', textContent: ds.label }),
       slider(ds.opacity, (v) => { ds.opacity = v; paintMap(); }, `${ds.label} opacity`));
     const list = Object.assign(document.createElement('div'), { className: 'measures' });
@@ -503,10 +523,12 @@ function buildBiControls() {
   const b0 = opts.find((x) => x.ds !== a0.ds && biAvailable(a0, x)) ?? opts.find((x) => biAvailable(a0, x));
   state.bi = { ds: { id: 'bivariate', label: 'Compare two measures', visible: false, opacity: 0.8, measures: [], virtual: true }, a: a0, b: b0, prev: null };
   const group = Object.assign(document.createElement('details'), { className: 'dataset', open: false });
+  group.dataset.mode = 'bivariate';
   const sum = document.createElement('summary');
-  const on = Object.assign(document.createElement('input'), { type: 'checkbox', id: 'bi-on' });
+  const on = Object.assign(document.createElement('input'), { type: 'radio', name: 'mode' });
+  on.dataset.moderadio = '1';
   on.setAttribute('aria-label', 'Compare two measures');
-  on.addEventListener('change', () => (on.checked ? showBi() : hideBi()));
+  on.addEventListener('change', () => { if (on.checked) showBi(); });
   sum.append(on, Object.assign(document.createElement('span'), { className: 'dataset-label', textContent: 'Compare two measures' }),
     slider(state.bi.ds.opacity, (v) => { state.bi.ds.opacity = v; paintMap(); }, 'Comparison opacity'));
   const body = Object.assign(document.createElement('div'), { className: 'measures bi-body' });
@@ -584,12 +606,29 @@ function legendModel() {
   rows.push({ colour: NO_DATA, label: 'No data' });
   return { title, head, rows, note: ds.note ?? '' };
 }
+// The comparison legend as an SVG (shapes from js/legendgrid.js, in pixels).
+const measureTextPx = (() => {
+  const c = document.createElement('canvas').getContext('2d');
+  return (text, size) => { c.font = `${size}px ${getComputedStyle(document.body).fontFamily}`; return c.measureText(text).width; };
+})();
+function gridSvg(grid) {
+  const W = 290, { h, items } = gridLayout(grid, W, 26, 11, measureTextPx);
+  const f = (n) => Number(n.toFixed(2));
+  const body = items.map((it) => {
+    if (it.type === 'rect') return `<rect x="${f(it.x - 0.15)}" y="${f(it.y - 0.15)}" width="${f(it.w + 0.3)}" height="${f(it.h + 0.3)}" fill="${esc(it.fill)}"/>`;
+    if (it.type === 'line') return `<line x1="${f(it.x1)}" y1="${f(it.y1)}" x2="${f(it.x2)}" y2="${f(it.y2)}"/>`;
+    if (it.type === 'tri') return `<polygon points="${it.pts.map((p) => p.map(f).join(',')).join(' ')}"/>`;
+    const anchor = it.anchor === 'end' ? 'end' : it.anchor === 'middle' ? 'middle' : 'start';
+    return `<text x="${f(it.x)}" y="${f(it.y)}" font-size="${f(it.size)}" text-anchor="${anchor}"${it.rot ? ` transform="rotate(${it.rot} ${f(it.x)} ${f(it.y)})"` : ''}>${esc(it.text)}</text>`;
+  }).join('');
+  return `<svg class="bigrid" width="${W}" height="${Math.ceil(h)}" viewBox="0 0 ${W} ${Math.ceil(h)}" role="img" aria-label="Colour grid for the two measures">${body}</svg>`;
+}
 function renderLegend() {
   const lg = legendModel();
   $('furniture').hidden = !lg;
   if (!lg) return;
   $('legend').innerHTML = `<p class="legend-title">${lg.title.map(esc).join('<br>')}</p>` +
-    (lg.grid ? `<div class="bigrid"><span class="bigrid-y">${esc(lg.grid.y)}</span><div class="bigrid-cells">${lg.grid.colours.flat().map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</div><span class="bigrid-x">${esc(lg.grid.x)}</span></div>` : '') +
+    (lg.grid ? gridSvg(lg.grid) : '') +
     (lg.head ? `<div class="legend-row legend-head"><i></i>${esc(lg.head)}</div>` : '') +
     lg.rows.map((r) => `<div class="legend-row"><i style="background:${esc(r.colour)}"></i>${esc(r.label)}</div>`).join('') +
     (lg.note ? `<p class="legend-note">${esc(lg.note)}</p>` : '');

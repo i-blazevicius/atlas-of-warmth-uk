@@ -92,7 +92,8 @@ nation only.
 - Each area is put in the best, middle or worst third of **its own nation** on each measure (`computeThirds` in `js/app.js`; ties share a third by the middle of their rank, so deciles split 3 / 4 / 3). The darkest cell is worst on both. A measure's `worse: 'low'` in the config marks a low number as the bad end (deprivation deciles and the EPC measures); otherwise high is bad.
 - The thirds are stored in feature state (`<dataset>:<measure>:third`), so changing the pair only changes the paint expression. Areas without both values are grey.
 - The pair is in the address: `#bi=deprivation.imd,fuelpoverty.lsoa` (with an area code too: `#E01000001&bi=…`).
-- The PDF export draws the 3 × 3 legend with its axis labels.
+- The legend (`js/legendgrid.js`, drawn as SVG on screen and as vectors in the PDF) is a borderless grid with arrows up and right from the bottom-left corner, "best on both" / "worst on both" at the corners, and the two measures' names on the left and below.
+- Modes (Compare two measures, Deprivation, Fuel poverty, Energy efficiency) are chosen with a radio button; only the chosen mode's measures, selectors and opacity slider are active.
 
 ## PDF export
 
