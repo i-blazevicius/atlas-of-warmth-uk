@@ -15,6 +15,8 @@ state.selected = null;       // the open area's code, e.g. E01000001
 state.datasets = [];         // loaded datasets (see loadDataset)
 state.active = null;         // { dataset, measure }: what colours the map
 state.rows = new Map();      // area code -> [{ dataset, row }]
+state.hh = new Map();        // area code -> { n: households, basis } (data/households.csv)
+state.focus = null;          // a highlighted legend class: { id, keys: [numbers], none }; the other areas fade
 state.base = { on: true, opacity: CONFIG.underlay?.opacity ?? 1, labels: CONFIG.underlay?.labels ?? true, layers: [] };
 
 const $ = (id) => document.getElementById(id);
@@ -306,6 +308,87 @@ function fillExpression(ds, m) {
   match.push(NO_DATA);
   return match;
 }
+// ── Highlighting a legend class ────────────────────────────
+// Clicking a colour in the legend fades every area not in that class. Each area has one "key" number per measure (a rate's
+// class, a decile, or 3 × third + third for a comparison); the legend rows carry the same numbers.
+const FADE = 0.15;
+const keyExpression = (ds, m) => {
+  if (m.kind === 'bivariate') {
+    const third = (x) => ['coalesce', ['feature-state', `${stateKey(x.ds, x.m)}:third`], -100];
+    return ['+', ['*', 3, third(m.a)], third(m.b)];
+  }
+  return m.kind === 'rate' ? ['coalesce', ['feature-state', `${stateKey(ds, m)}:class`], -1] : ['coalesce', ['feature-state', stateKey(ds, m)], 0];
+};
+const validKeys = (ds, m) => (m.kind === 'bivariate' ? [0, 1, 2, 3, 4, 5, 6, 7, 8] : m.kind === 'rate' ? classesOf(ds, m).colours.map((_, i) => i) : RAMP.map((_, i) => i + 1));
+function focusTest(ds, m) {
+  const f = state.focus;
+  const inList = ['in', keyExpression(ds, m), ['literal', f.none ? validKeys(ds, m) : f.keys]];
+  return f.none ? ['!', inList] : inList;
+}
+// The key of an area from its feature state (as the paint expression sees it); undefined = no data.
+function keyOfState(ds, m, st) {
+  if (m.kind === 'bivariate') {
+    const ta = st[`${stateKey(m.a.ds, m.a.m)}:third`], tb = st[`${stateKey(m.b.ds, m.b.m)}:third`];
+    return ta == null || tb == null ? undefined : 3 * ta + tb;
+  }
+  if (m.kind === 'rate') { const i = st[`${stateKey(ds, m)}:class`]; return i >= 0 && i != null ? i : undefined; }
+  const v = st[stateKey(ds, m)];
+  return v ? v : undefined;
+}
+const inFocus = (key) => { const f = state.focus; return !f || (f.none ? key === undefined : key !== undefined && f.keys.includes(key)); };
+function fadeColour(hex) {
+  const n = parseInt(hex.slice(1), 16), mix = (c) => Math.round(c + (255 - c) * 0.8);
+  return `#${[n >> 16 & 255, n >> 8 & 255, n & 255].map((c) => mix(c).toString(16).padStart(2, '0')).join('')}`;
+}
+function toggleFocus(key) {
+  const id = String(key);
+  state.focus = state.focus?.id === id ? null : { id, keys: key === 'none' ? [] : [Number(key)], none: key === 'none' };
+  paintMap();
+  renderLegend();
+}
+// Households in the highlighted class, from data/households.csv: { total, perNation, scope, all } or null if there are none.
+// The areas counted are those the map draws for the active measure.
+function focusCount() {
+  const { dataset: ds, measure: m } = state.active ?? {};
+  if (!state.focus || !ds || !state.hh.size) return null;
+  const ta = m.kind === 'bivariate' ? m.a.ds.third.get(m.a.m.id) : null, tb = m.kind === 'bivariate' ? m.b.ds.third.get(m.b.m.id) : null;
+  const keyOf = (code) => {
+    if (m.kind === 'bivariate') { const x = ta?.get(code), y = tb?.get(code); return x === undefined || y === undefined ? undefined : 3 * x + y; }
+    const r = ds.byCode.get(code);
+    if (!r) return undefined;
+    const nation = String(r[ds.col.nation] ?? '').trim();
+    if (m.names && !m.names[nation]) return undefined;
+    const raw = r[ds.col[`v:${m.id}`]], v = Number(raw);
+    if (raw === '' || raw == null || !Number.isFinite(v)) return undefined;
+    return m.kind === 'rate' ? classIndex(classesOf(ds, m), nation, v) : v;
+  };
+  const perNation = {}, withData = new Set();
+  let total = 0, all = 0;
+  for (const [code, { n }] of state.hh) {
+    const set = areaSetOf(code);
+    if (!set || (m.areas ? !m.areas.includes(set.id) : set.optional)) continue;
+    const k = keyOf(code), nation = code[0] === '9' ? 'N' : code[0];
+    if (k !== undefined) { all += n; withData.add(nation); }
+    if (inFocus(k)) { total += n; perNation[nation] = (perNation[nation] ?? 0) + n; }
+  }
+  if (!all) return null;
+  for (const n of Object.keys(perNation)) if (!perNation[n]) delete perNation[n];
+  const nations = Object.keys(NATIONS).filter((n) => (state.focus.none ? perNation[n] : withData.has(n)));
+  return { total, perNation, all, nations };
+}
+// "2.4 million" / "37,800": estimates, so rounded.
+function humanCount(n) {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)} million`;
+  return fmt(n >= 1000 ? Math.round(n / 100) * 100 : Math.round(n));
+}
+function focusText() {
+  const c = focusCount();
+  if (!c) return state.focus ? '' : '';
+  const names = c.nations.map((n) => NATIONS[n]);
+  const where = c.nations.length === Object.keys(NATIONS).length ? 'the UK' : names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+  const what = state.focus.none ? 'in areas with no data' : 'in the selected bracket';
+  return `There are about ${humanCount(c.total)} households across ${where} ${what}.`;
+}
 function paintMap() {
   const { dataset: ds, measure } = state.active ?? {};
   // Which area sets are drawn: the measure's own list, else every set that is not optional.
@@ -320,7 +403,8 @@ function paintMap() {
   for (const id of FILLS) {
     map.setPaintProperty(id, 'fill-color', ds ? fillExpression(ds, measure) : NO_DATA);
     // A dataset switched off is made fully transparent (not hidden), so areas can still be clicked.
-    map.setPaintProperty(id, 'fill-opacity', ds && ds.visible ? ds.opacity : 0);
+    const base = ds && ds.visible ? ds.opacity : 0;
+    map.setPaintProperty(id, 'fill-opacity', ds && ds.visible && state.focus ? ['case', focusTest(ds, measure), base, base * FADE] : base);
   }
 }
 
@@ -352,6 +436,7 @@ function setActive(ds, measure) {
   for (const d of state.datasets) d.visible = d === ds;
   ds.lastMeasure = measure;
   state.active = { dataset: ds, measure };
+  state.focus = null;
   paintMap();
   renderLegend();
   if (state.selected) openArea(state.selected);
@@ -413,6 +498,7 @@ function showBi() {
   bi.ds.visible = true;
   for (const d of state.datasets) d.visible = d === bi.a.ds || d === bi.b.ds;       // the click panel lists the two measures' datasets
   state.active = { dataset: bi.ds, measure: makeBiMeasure(bi.a, bi.b) };
+  state.focus = null;
   paintMap();
   renderLegend();
   if (state.selected) openArea(state.selected);
@@ -582,9 +668,10 @@ function legendModel() {
   if (!ds || !ds.visible) return null;
   if (measure.kind === 'bivariate') {
     const { a, b } = measure, ns = Object.keys(NATIONS).filter((n) => measure.nations.has(n));
-    const colours = [2, 1, 0].map((ty) => [0, 1, 2].map((tx) => biColour(tx, ty)));       // rows from the top (worst vertical) down
+    const dim = (k, c) => (inFocus(k) ? c : fadeColour(c));
+    const colours = [2, 1, 0].map((ty) => [0, 1, 2].map((tx) => dim(3 * tx + ty, biColour(tx, ty))));       // rows from the top (worst vertical) down
     return { title: ['Two measures compared', ns.length < Object.keys(NATIONS).length ? `${ns.map((n) => NATIONS[n]).join(', ')} only` : ''].filter(Boolean),
-      head: '', rows: [{ colour: NO_DATA, label: 'No data' }],
+      head: '', rows: [{ colour: inFocus(undefined) ? NO_DATA : fadeColour(NO_DATA), label: 'No data', key: 'none' }], focusText: focusText(),
       grid: { colours, x: fullLabel(a), y: fullLabel(b) },
       note: 'Each area is placed in the best, middle or worst third of its own nation on each measure, so nations are never compared with each other. The darkest colour is in the worst third on both.' };
   }
@@ -602,13 +689,13 @@ function legendModel() {
     }
     const edge = (br, i) => (i === 0 ? `< ${br[0]}${unit}` : i === br.length ? `> ${br[i - 1]}${unit}` : `${br[i - 1]}–${br[i]}${unit}`);
     if (cols.length > 1) head = cols.map((c) => c.label).join(' · ');
-    rows = cl.colours.map((c, i) => ({ colour: c, label: cols.map((k) => edge(k.br, i)).join(' · ') }));
+    rows = cl.colours.map((c, i) => ({ colour: inFocus(i) ? c : fadeColour(c), label: cols.map((k) => edge(k.br, i)).join(' · '), key: i }));
   } else {
     const label = (i) => (i === 1 ? '1 · most deprived 10%' : i === 10 ? '10 · least deprived 10%' : String(i));
-    rows = RAMP.map((c, i) => ({ colour: c, label: label(i + 1) }));
+    rows = RAMP.map((c, i) => ({ colour: inFocus(i + 1) ? c : fadeColour(c), label: label(i + 1), key: i + 1 }));
   }
-  rows.push({ colour: NO_DATA, label: 'No data' });
-  return { title, head, rows, note: ds.note ?? '' };
+  rows.push({ colour: inFocus(undefined) ? NO_DATA : fadeColour(NO_DATA), label: 'No data', key: 'none' });
+  return { title, head, rows, note: ds.note ?? '', focusText: focusText() };
 }
 // The comparison legend as an SVG (shapes from js/legendgrid.js, in pixels).
 const measureTextPx = (() => {
@@ -619,7 +706,7 @@ function gridSvg(grid) {
   const W = 290, { h, items } = gridLayout(grid, W, 26, 11, measureTextPx);
   const f = (n) => Number(n.toFixed(2));
   const body = items.map((it) => {
-    if (it.type === 'rect') return `<rect x="${f(it.x - 0.15)}" y="${f(it.y - 0.15)}" width="${f(it.w + 0.3)}" height="${f(it.h + 0.3)}" fill="${esc(it.fill)}"/>`;
+    if (it.type === 'rect') return `<rect data-key="${3 * it.c + (2 - it.r)}"${state.focus?.id === String(3 * it.c + (2 - it.r)) ? ' class="sel"' : ''} x="${f(it.x - 0.15)}" y="${f(it.y - 0.15)}" width="${f(it.w + 0.3)}" height="${f(it.h + 0.3)}" fill="${esc(it.fill)}"/>`;
     if (it.type === 'line') return `<line x1="${f(it.x1)}" y1="${f(it.y1)}" x2="${f(it.x2)}" y2="${f(it.y2)}"/>`;
     if (it.type === 'tri') return `<polygon points="${it.pts.map((p) => p.map(f).join(',')).join(' ')}"/>`;
     const anchor = it.anchor === 'end' ? 'end' : it.anchor === 'middle' ? 'middle' : 'start';
@@ -631,10 +718,18 @@ function renderLegend() {
   const lg = legendModel();
   $('furniture').hidden = !lg;
   if (!lg) return;
+  const fp = $('focus-panel');
+  fp.hidden = !state.focus;
+  if (state.focus) {
+    const c = focusCount(), by = c && c.nations.length > 1 ? Object.entries(c.perNation).map(([n, v]) => `${NATIONS[n]} ${humanCount(v)}`).join(' · ') : '';
+    fp.innerHTML = `<p>${c ? esc(lg.focusText) : 'Household counts are not available for this map.'}</p>` +
+      (c ? `<p class="small">${state.focus.none ? '' : `${Math.round(c.total / c.all * 100)}% of the ${esc(humanCount(c.all))} households in areas with data.`}${by ? ` ${esc(by)}.` : ''}</p>` : '') +
+      '<button type="button" data-clear>Clear highlight</button>';
+  }
   $('legend').innerHTML = `<p class="legend-title">${lg.title.map(esc).join('<br>')}</p>` +
     (lg.grid ? gridSvg(lg.grid) : '') +
     (lg.head ? `<div class="legend-row legend-head"><i></i>${esc(lg.head)}</div>` : '') +
-    lg.rows.map((r) => `<div class="legend-row"><i style="background:${esc(r.colour)}"></i>${esc(r.label)}</div>`).join('') +
+    lg.rows.map((r) => `<div class="legend-row selectable${state.focus?.id === String(r.key) ? ' sel' : ''}" data-key="${esc(String(r.key))}" role="button" tabindex="0"><i style="background:${esc(r.colour)}"></i>${esc(r.label)}</div>`).join('') +
     (lg.note ? `<p class="legend-note">${esc(lg.note)}</p>` : '');
 }
 
@@ -644,15 +739,16 @@ function openArea(code) {
   state.selected = code;
   for (const a of AREA_SETS) map.setFilter(`selected-${a.id}`, ['==', ['get', a.code], code]);
   const entries = state.rows.get(code) ?? [];
-  let html = `<p class="area-code">${esc(code)}</p>`;
-  if (!entries.length) {
-    html += `<p class="area-name">${esc(code)}</p><p class="hint">${state.rows.has(code) ? 'No dataset has values for this area.' : 'No dataset has values for this area.'}</p>`;
-  }
   const bm = state.active?.measure?.kind === 'bivariate' ? state.active.measure : null;
+  let biHtml = '';
   if (bm) {
     const ta = bm.a.ds.third.get(bm.a.m.id)?.get(code), tb = bm.b.ds.third.get(bm.b.m.id)?.get(code), has = ta !== undefined && tb !== undefined;
-    html += `<p class="control-label">Comparison</p><div class="panel-measure current"><span class="block" style="background:${esc(has ? biColour(ta, tb) : NO_DATA)}"></span>` +
+    biHtml = `<p class="control-label">Comparison</p><div class="panel-measure current"><span class="block" style="background:${esc(has ? biColour(ta, tb) : NO_DATA)}"></span>` +
       `<span class="name">${has ? `${esc(fullLabel(bm.a))}: ${thirdWords[ta]}<br>${esc(fullLabel(bm.b))}: ${thirdWords[tb]}` : 'Not both measures have a value for this area'}</span></div>`;
+  }
+  let html = `<p class="area-code">${esc(code)}</p>`;
+  if (!entries.length) {
+    html += `<p class="area-name">${esc(code)}</p><p class="hint">No dataset has values for this area.</p>${biHtml}`;
   }
   entries.forEach(({ dataset: ds, row }, i) => {
     const g = (k) => (ds.col[k] ? String(row[ds.col[k]] ?? '').trim() : '');
@@ -660,6 +756,9 @@ function openArea(code) {
     if (i === 0) {
       html += `<p class="area-name">${esc(g('name') || code)}</p>`;
       html += `<p class="panel-parent">${esc([g('pname'), NATIONS[nation]].filter(Boolean).join(', '))}</p>`;
+      const hh = state.hh.get(code);
+      if (hh) html += `<p class="panel-households" title="${esc(hh.basis)}">${nation === 'N' ? 'about ' : ''}${fmt(hh.n)} households</p>`;
+      html += biHtml;
     }
     const mark = html.length;
     let added = 0;
@@ -879,6 +978,12 @@ async function start() {
     if (!map.queryRenderedFeatures(e.point, { layers: FILLS }).length) { closeArea(); go(''); }
   });
 
+  if (CONFIG.households) {
+    try {
+      const { rows } = await loadCSV(CONFIG.households.file, 'Households');
+      for (const r of rows) state.hh.set(String(r.code).trim(), { n: Number(r.households), basis: r.basis });
+    } catch (e) { problem(`Household counts could not be read (${e.message}); they will not be shown.`); }
+  }
   for (const cfg of CONFIG.datasets) {
     const ds = await loadDataset(cfg);
     state.datasets.push(ds);
@@ -886,6 +991,15 @@ async function start() {
   }
   buildDatasetControls();
   buildBiControls();
+  $('furniture').addEventListener('click', (e) => {
+    if (e.target.closest('[data-clear]')) { state.focus = null; paintMap(); renderLegend(); return; }
+    const hit = e.target.closest('[data-key]');
+    if (hit) toggleFocus(hit.dataset.key);
+  });
+  $('furniture').addEventListener('keydown', (e) => {
+    const hit = e.target.closest?.('.legend-row[data-key]');
+    if (hit && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleFocus(hit.dataset.key); }
+  });
   const first = state.datasets[0];
   if (first) setActive(first, first.measures[0]);
   const onMap = first ? first.byCode.size - Object.values(first.unmapped).reduce((s, n) => s + n, 0) : 0;
@@ -900,6 +1014,10 @@ start().catch(window.mapFail);
 // ── PDF export ─────────────────────────────────────────────
 // The colour an area has on screen, from its feature state (the same rule as the paint expression).
 function featureColour(ds, m, st) {
+  const c = rawFeatureColour(ds, m, st);
+  return state.focus && !inFocus(keyOfState(ds, m, st)) ? fadeColour(c) : c;
+}
+function rawFeatureColour(ds, m, st) {
   if (m.kind === 'bivariate') {
     const ta = st[`${stateKey(m.a.ds, m.a.m)}:third`], tb = st[`${stateKey(m.b.ds, m.b.m)}:third`];
     return ta == null || tb == null ? NO_DATA : biColour(ta, tb);

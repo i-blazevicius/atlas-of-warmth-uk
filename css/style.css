@@ -123,6 +123,17 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .legend-row { display: flex; align-items: center; gap: 8px; height: 16px; font-size: 12px; }
 .legend-head { color: var(--ink-faint); }
 .legend-head i { visibility: hidden; }
+.legend-row.selectable { cursor: pointer; border-radius: 2px; }
+.legend-row.selectable:hover { background: rgba(0, 0, 0, 0.05); }
+.legend-row.sel { font-weight: 600; }
+.legend-row.sel i { outline: 1.5px solid var(--ink); outline-offset: 1px; }
+.bigrid rect[data-key] { cursor: pointer; }
+.bigrid rect.sel { stroke: var(--ink); stroke-width: 1.6; paint-order: stroke; }
+.focus-panel { margin: 0 0 10px; padding: 8px 10px; border: 1px solid var(--panel-line); border-radius: 3px; font-size: 12px; line-height: 1.4; max-width: 270px; }
+.focus-panel p { margin: 0; }
+.focus-panel .small { margin-top: 4px; color: var(--ink-faint); font-size: 11px; }
+.focus-panel button { margin-top: 6px; padding: 0; border: 0; background: none; color: var(--ink-dim); font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; }
+.panel-households { margin: -4px 0 8px; color: var(--ink-dim); }
 .legend-row i { width: 22px; height: 12px; border: 1px solid var(--panel-line); flex: none; }
 /* North arrow and scale bar: the same height and the same 1px line */
 :root { --furniture-h: 20px; }

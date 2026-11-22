@@ -8,7 +8,7 @@
 export function gridLayout(grid, W, cell, fs, measure) {
   const items = [];
   const gx = (W - 3 * cell) / 2, g = fs * 0.5, ah = fs * 0.45, small = fs * 0.85, lead = fs * 1.2;
-  grid.colours.forEach((row, r) => row.forEach((fill, c) => items.push({ type: 'rect', x: gx + c * cell, y: r * cell, w: cell, h: cell, fill })));
+  grid.colours.forEach((row, r) => row.forEach((fill, c) => items.push({ type: 'rect', x: gx + c * cell, y: r * cell, w: cell, h: cell, fill, r, c })));
   const ax = gx - g, ay = 3 * cell + g;                                  // the arrows sit beside the grid, each starting level with its edge
   items.push({ type: 'line', x1: ax, y1: 3 * cell, x2: ax, y2: ah });
   items.push({ type: 'tri', pts: [[ax, 0], [ax - ah * 0.6, ah * 1.3], [ax + ah * 0.6, ah * 1.3]] });

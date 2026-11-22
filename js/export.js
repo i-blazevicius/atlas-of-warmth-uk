@@ -301,7 +301,8 @@ export function createExporter(ctx) {
           const sw = swFor(fs), sh = fs * 1.15, row = fs * 1.55;
           const titleLines = lg.title.flatMap((t, i) => wrap(t, fs, inner).map((l) => ({ l, bold: i === 0 })));
           const headLines = lg.head ? wrap(lg.head, fs, inner) : [];
-          const noteLines = lg.note ? wrap(lg.note, fs * 0.9, inner) : [];
+          const noteText = [lg.note, lg.focusText].filter(Boolean).join(' ');
+          const noteLines = noteText ? wrap(noteText, fs * 0.9, inner) : [];
           // A comparison of two measures draws the grid legend of js/legendgrid.js (10 mm cells) in its own block.
           const gl = lg.grid ? gridLayout(lg.grid, inner, 10 * MM, fs, measureText) : null;
           const gridH = gl ? gl.h + fs * 0.6 : 0;

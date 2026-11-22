@@ -9,6 +9,10 @@ export default {
   // Working title (the repository's name). Shown in the control panel and the browser tab.
   title: 'Atlas of Warmth UK',
 
+  // Households per small area (data/households.csv, built by tools/build_households.py): shown in the click panel and used for
+  // the household count of a highlighted legend class.
+  households: { file: 'data/households.csv' },
+
   data: {
     styles: 'data/styles.json',
   },

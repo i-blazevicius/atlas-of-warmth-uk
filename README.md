@@ -87,6 +87,11 @@ nations (NI councils come from the local authority tiles, which also hold other 
 differently in each nation and NI's figure is a different statistic, so each nation has its own edges: compare areas within a
 nation only.
 
+## Households and highlighting a legend class
+
+- **Households per area**: `data/households.csv` (code, households, basis), built by `python3 tools/build_households.py` from the originals in `source/`. England and Wales: Census 2021 table TS041 by LSOA (ONS). Scotland: NRS small area household estimates by 2011 data zone, 2025 sheet, using "occupied dwellings" as the household count. Northern Ireland: Census 2011 households by SOA (NISRA), each SOA scaled so its local government district (2014 boundaries) adds up to the Census 2021 total (MS-E01): an estimate that assumes an SOA's share of its district hasn't changed. The click panel shows the count under the location line (Northern Ireland's as "about"); the basis is in its tooltip. Council-level (local authority) areas have no household counts.
+- **Highlighting**: click a colour in the legend (a class, a decile, "No data" or a cell of the comparison grid) and every area outside it fades to 15% (`FADE` in `js/app.js`); click it again or "Clear highlight" to undo. A small panel above the legend then says how many households are in the highlighted class, across the nations the measure covers, with each nation's share. Changing measure or mode clears it. The PDF shows the faded areas and legend, and adds the household sentence to the legend's note.
+
 ## Compare two measures
 
 "Compare two measures" in the control panel colours the map by two measures at once on a 3 × 3 grid (palette in `bivariate.colours` in `js/config.js`). Pick the measure for the horizontal axis ("Across") and the vertical one ("Up"); choices that share no area with the other axis, or are the same measure, are greyed out.
