@@ -66,6 +66,8 @@ export default {
   outlines: {
     file: 'data/tiles/outlines.pmtiles',
     layers: [
+      // The coastline is drawn first (below the borders) but listed first in the menu; it is the outer edge of the four nations.
+      { id: 'coast', label: 'Coastline', color: '#3a3a3a', width: [0.35, 1.1], from: 3, on: false, menuFirst: true },
       { id: 'lads', label: 'Local authorities', color: '#3a3a3a', width: [0.35, 1.1], from: 6, on: true },
       { id: 'regions', label: 'Regions (England)', color: '#222222', width: [0.6, 1.8], from: 4, on: true },
       { id: 'nations', label: 'Nations', color: '#111111', width: [1.1, 2.6], from: 3, on: true },
@@ -147,6 +149,9 @@ export default {
       measures: [
         { id: 'lad', label: 'Local authorities', kind: 'rate', value: 'lad rate', rank: null, areas: ['lad'],
           counts: ['fuel poor households', 'households'], names: { E: 'Households in fuel poverty', S: 'Households in fuel poverty' } },
+        // Only for comparing with other measures: every LSOA / data zone takes its local authority's rate (rough, area-level).
+        { id: 'ladi', label: 'Local authority rate (shared by its areas)', kind: 'rate', value: 'lad rate inherited', rank: null, areas: ['lsoa', 'dz'],
+          compareOnly: true, names: { E: 'Local authority fuel poverty rate', S: 'Local authority fuel poverty rate' } },
         { id: 'lsoa', label: 'LSOAs', kind: 'rate', value: 'lsoa rate', rank: null, areas: ['lsoa', 'dz', 'soa'],
           counts: ['fuel poor households', 'households'], names: { E: 'Households in fuel poverty' },
           caution: 'LSOA figures are modelled estimates: use them to spot general patterns and very high or low areas, not to rank or compare individual LSOAs.' },

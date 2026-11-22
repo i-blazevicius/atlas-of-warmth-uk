@@ -8,6 +8,7 @@ Reads from source/: Countries (Dec 2021, UK, BGC), Regions (Dec 2021, England, B
 coastline (the base map and the data already show the coast), so each layer is a set of lines:
   nations   borders between England, Wales and Scotland
   regions   borders between England's nine regions
+  coast     the outer edge of the four nations (added last, below)
   lads      borders between local authorities (London boroughs, Welsh principal areas, Scottish council areas,
             Northern Ireland's districts)
 Writes data/tiles/outlines.pmtiles (needs geopandas and tippecanoe; TIPPECANOE= if not on the PATH).
@@ -49,6 +50,15 @@ for layer, (f, name) in FILES.items():
     path = f'{tmp}/{layer}.geojsonl'
     out.to_file(path, driver='GeoJSONSeq', COORDINATE_PRECISION=6)
     args += ['-L', f'{layer}:{path}']
+# Coastline: the outer edge of the four nations' union (it includes Northern Ireland's land border with Ireland, which is the
+# edge of the UK files).
+g = gpd.read_file(S + FILES['nations'][0]).to_crs(27700)
+edge = g.geometry.make_valid().union_all().boundary
+coast = gpd.GeoDataFrame({'layer': ['coast']}, geometry=[edge], crs=27700).explode(index_parts=False).to_crs(4326)
+print(f'coast: {len(coast)} lines')
+path = f'{tmp}/coast.geojsonl'
+coast.to_file(path, driver='GeoJSONSeq', COORDINATE_PRECISION=6)
+args += ['-L', f'coast:{path}']
 cmd = [os.environ.get('TIPPECANOE', 'tippecanoe'), '-o', 'data/tiles/outlines.pmtiles', '--force', '-Z3', '-z12', '-q',
        '--no-tile-size-limit', '--no-feature-limit', '--simplification=4'] + args
 subprocess.run(cmd, check=True)

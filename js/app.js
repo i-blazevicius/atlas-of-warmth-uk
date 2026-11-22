@@ -359,6 +359,10 @@ function setActive(ds, measure) {
   syncModes();
   syncHash();
 }
+// Choosing a mode unfolds its group and folds the other modes (folding by hand still works afterwards).
+function openOnly(group) {
+  for (const g of document.querySelectorAll('[data-mode]')) g.open = g === group;
+}
 // Only one mode is live: its measures, selectors and opacity slider are active, the others greyed out and inactive.
 function syncModes() {
   const act = state.active?.dataset;
@@ -473,7 +477,7 @@ function buildBaseControls() {
   box.append(base);
   if (!OUTLINES.length) return;
   const rows = Object.assign(document.createElement('div'), { className: 'sublayers' });
-  for (const o of [...OUTLINES].reverse()) {          // nations first
+  for (const o of [...OUTLINES].reverse().sort((p, q) => !!q.menuFirst - !!p.menuFirst)) {          // coastline, then nations first
     const swatch = Object.assign(document.createElement('i'), { className: 'outline-swatch' });
     swatch.style.borderTopWidth = `${Math.max(1, Math.round(o.width[0] + 0.5))}px`;
     swatch.style.borderTopColor = o.color;
@@ -491,12 +495,12 @@ function buildDatasetControls() {
     const on = Object.assign(document.createElement('input'), { type: 'radio', name: 'mode', checked: false });
     on.dataset.moderadio = '1';
     on.setAttribute('aria-label', `Show ${ds.label}`);
-    on.addEventListener('change', () => { if (on.checked) setActive(ds, ds.lastMeasure ?? ds.measures[0]); });
+    on.addEventListener('change', () => { if (on.checked) { setActive(ds, ds.lastMeasure ?? ds.measures.find((x) => !x.compareOnly)); openOnly(group); } });
     sum.append(on, Object.assign(document.createElement('span'), { className: 'dataset-label', textContent: ds.label }),
       slider(ds.opacity, (v) => { ds.opacity = v; paintMap(); }, `${ds.label} opacity`));
     const list = Object.assign(document.createElement('div'), { className: 'measures' });
     list.setAttribute('role', 'radiogroup');
-    for (const m of ds.measures) {
+    for (const m of ds.measures.filter((x) => !x.compareOnly)) {
       const label = document.createElement('label');
       const input = Object.assign(document.createElement('input'), { type: 'radio', name: 'measure', value: m.id });
       input.dataset.ds = ds.id; input.dataset.measure = '1';
@@ -528,7 +532,7 @@ function buildBiControls() {
   const on = Object.assign(document.createElement('input'), { type: 'radio', name: 'mode' });
   on.dataset.moderadio = '1';
   on.setAttribute('aria-label', 'Compare two measures');
-  on.addEventListener('change', () => { if (on.checked) showBi(); });
+  on.addEventListener('change', () => { if (on.checked) { showBi(); openOnly(group); } });
   sum.append(on, Object.assign(document.createElement('span'), { className: 'dataset-label', textContent: 'Compare two measures' }),
     slider(state.bi.ds.opacity, (v) => { state.bi.ds.opacity = v; paintMap(); }, 'Comparison opacity'));
   const body = Object.assign(document.createElement('div'), { className: 'measures bi-body' });
@@ -639,10 +643,10 @@ function renderLegend() {
 function openArea(code) {
   state.selected = code;
   for (const a of AREA_SETS) map.setFilter(`selected-${a.id}`, ['==', ['get', a.code], code]);
-  const entries = (state.rows.get(code) ?? []).filter((e) => e.dataset.visible);
+  const entries = state.rows.get(code) ?? [];
   let html = `<p class="area-code">${esc(code)}</p>`;
   if (!entries.length) {
-    html += `<p class="area-name">${esc(code)}</p><p class="hint">${state.rows.has(code) ? 'Switch a dataset on to see its values here.' : 'No dataset has values for this area.'}</p>`;
+    html += `<p class="area-name">${esc(code)}</p><p class="hint">${state.rows.has(code) ? 'No dataset has values for this area.' : 'No dataset has values for this area.'}</p>`;
   }
   const bm = state.active?.measure?.kind === 'bivariate' ? state.active.measure : null;
   if (bm) {
@@ -657,8 +661,11 @@ function openArea(code) {
       html += `<p class="area-name">${esc(g('name') || code)}</p>`;
       html += `<p class="panel-parent">${esc([g('pname'), NATIONS[nation]].filter(Boolean).join(', '))}</p>`;
     }
+    const mark = html.length;
+    let added = 0;
     html += `<p class="control-label">${esc(ds.label)}</p>`;
     for (const m of ds.measures) {
+      if (m.compareOnly) continue;
       if (m.names && !m.names[nation]) continue;            // this nation has no such measure
       if (m.areas && !m.areas.includes(areaSetOf(code)?.id)) continue;   // measure is for another kind of area
       const raw = g(`v:${m.id}`), v = Number(raw), rk = Number(g(`r:${m.id}`));
@@ -676,6 +683,7 @@ function openArea(code) {
           ? `${v.toFixed(dp)}${u}${Number.isFinite(a) ? ` (from ${fmt(a)} certificates${Number.isFinite(b) && b ? `, ${Math.round(a / b * 100)}% of homes have one` : ''})` : ''}`
           : `${v.toFixed(dp)}${u}${Number.isFinite(a) && Number.isFinite(b) && b ? ` of households: ${fmt(a)} of ${fmt(b)}` : ''}`;
       }
+      added++;
       const key = `${ds.id}:${m.id}`;
       const expandable = !!m.indicators?.includes(nation) && !!ds.indicatorsDir;
       const open = expandable && state.expanded.has(key);
@@ -686,6 +694,7 @@ function openArea(code) {
         (open ? '<div class="indicators"></div>' : '') +
         (m.caution && cur ? `<p class="panel-note">${esc(m.caution)}</p>` : '');
     }
+    if (!added) { html = html.slice(0, mark); return; }               // this dataset has nothing for this kind of area
     const pr = ds.parentRanks?.rows.get(g('pcode'));
     const m0 = state.active?.dataset === ds ? state.active.measure : ds.measures[0];
     const prRank = pr && ds.parentRanks.cols[m0.id] ? Number(pr[ds.parentRanks.cols[m0.id]]) : NaN;

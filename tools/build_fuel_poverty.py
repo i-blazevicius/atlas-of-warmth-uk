@@ -70,7 +70,25 @@ if os.path.exists(SCOT):
                    'lsoa rate': '', 'fuel poor households': '', 'households': ''})
     assert not byname and len(sc) == 32, byname
     print(f'{len(sc)} Scottish councils, rate {min(r["lad rate"] for r in sc)}-{max(r["lad rate"] for r in sc)}')
-out = pd.concat([la, ls, pd.DataFrame(sc)], ignore_index=True)
+# For comparing with area-level measures: every LSOA (England) and data zone (Scotland) also carries its local authority's
+# rate in `lad rate inherited` (a rough, area-level figure shared by all of the authority's small areas). The data zones'
+# council names come from data/deprivation-uk.csv, matched to the council rates above.
+la_rate = dict(zip(la.code, la['lad rate']))
+ls['lad rate inherited'] = ls['la_code'].map(la_rate)
+dz = pd.DataFrame()
+if sc:
+    dep = pd.read_csv('data/deprivation-uk.csv', usecols=['code', 'name', 'nation', 'la_name'])
+    dep = dep[dep.nation == 'S']
+    nrm = lambda n: re.sub(r'\s+', ' ', str(n)).strip().lower().replace('&', 'and')
+    by_name = {nrm(r['name']): r['lad rate'] for r in sc}
+    by_name['edinburgh, city of'] = by_name.get('city of edinburgh')
+    by_name['na h-eileanan an iar'] = by_name.get('na h-eileanan siar')
+    dz = pd.DataFrame({'code': dep.code.values, 'name': dep.name.values, 'nation': 'S', 'la_code': '', 'la_name': dep.la_name.values,
+                       'lad rate': '', 'lsoa rate': '', 'fuel poor households': '', 'households': '',
+                       'lad rate inherited': [by_name.get(nrm(n)) for n in dep.la_name]})
+    missing = dz[dz['lad rate inherited'].isna()].la_name.unique()
+    assert len(missing) == 0, missing
+out = pd.concat([la, ls, pd.DataFrame(sc), dz], ignore_index=True)
 assert out.code.is_unique
 out.to_csv('data/fuel-poverty.csv', index=False)
 print(f'{len(la)} local authorities, {len(ls)} LSOAs -> data/fuel-poverty.csv')

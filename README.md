@@ -32,7 +32,9 @@ map colours and the 10-class colour ramp (`map`). Settings it leaves out go back
   the PATH). Each rebuilt file adds its size to the repository's history, so don't rebuild casually.
 - **Outlines**: `data/tiles/outlines.pmtiles`, built by `python3 tools/build_outlines.py` from ONS Countries and Regions
   (Dec 2021, BGC) and Local Authority Districts (May 2026, BGC). Only borders between neighbouring areas are kept, so the
-  coast isn't traced twice; Northern Ireland's land border with Ireland is dropped with it (the base map shows it).
+  coast isn't traced twice. The **coastline** is a separate layer (the outer edge of the four nations, switched off by
+  default, listed first in the Outlines menu, drawn with the same thin line as local authorities); it includes Northern
+  Ireland's land border with Ireland.
   Each level has a white casing so it reads over dark colours; widths and colours in `js/config.js` → `outlines`.
 - **Values**: plain CSV keyed by area code, read by the page and written into each area's feature state once at load
   (~0.2 s for 43,500 areas). Switching measure only changes the colour expression; data changes never touch the tiles.
@@ -43,7 +45,7 @@ map colours and the 10-class colour ramp (`map`). Settings it leaves out go back
   a measure is in `js/config.js` → `measures[].names`. England, Wales and Scotland's overall SIMD come with official
   deciles; Scotland's domain deciles and all of Northern Ireland's are derived from the ranks by the same rule
   (listed in `data/deprivation-uk-derived.csv`). Scotland's tied domain ranks are kept as half ranks (e.g. 5955.5).
-- **Click panel**: only datasets that are switched on. One coloured block per measure the area's nation has, with the
+- **Click panel**: every dataset that has values for the area, whichever mode is active (a dataset with nothing for that kind of area is left out). One coloured block per measure the area's nation has, with the
   decile inside and the nation's own name; hovering shows the rank within the nation. England's areas also get their
   local authority's rank.
 - **Indicators behind a domain**: click a decile block or its name in the click panel to open the indicators the
@@ -62,7 +64,7 @@ in England, 2026 report (2024 data)* detailed tables (put the .xlsx in `source/`
 views: **local authorities** (the reliable one, drawn from `data/tiles/lad-2026.pmtiles`, an optional area set that is only
 drawn for measures listing it in `areas`) and **LSOAs** (finer, but modelled: use for general patterns, not for ranking
 individual LSOAs). Rates are coloured in classes (`classes` in `js/config.js`), not deciles. The figure is England's Low Income
-Low Energy Efficiency measure. Scotland (32 councils, SHCS 2022–24, put in `source/shcs-local-authority-tables-2022-2024.ods`) uses the 10%-of-income definition, so it has the same colours but its own class edges (`classes.breaks` per nation): compare areas within a nation only. Wales publishes national figures only and Northern Ireland none below NI level, so neither is mapped.
+Low Energy Efficiency measure. Scotland (32 councils, SHCS 2022–24, put in `source/shcs-local-authority-tables-2022-2024.ods`) uses the 10%-of-income definition, so it has the same colours but its own class edges (`classes.breaks` per nation): compare areas within a nation only. For comparisons, each English LSOA and Scottish data zone can also take its council's rate (`lad rate inherited` in the CSV, the measure "Local authority rate (shared by its areas)", `compareOnly` in the config so it isn't a map or click-panel measure): rough, area-level, and Wales has none. Wales publishes national figures only and Northern Ireland none below NI level, so neither is mapped.
 
 
 ### Energy efficiency (EPC), all four nations
@@ -92,8 +94,8 @@ nation only.
 - Each area is put in the best, middle or worst third of **its own nation** on each measure (`computeThirds` in `js/app.js`; ties share a third by the middle of their rank, so deciles split 3 / 4 / 3). The darkest cell is worst on both. A measure's `worse: 'low'` in the config marks a low number as the bad end (deprivation deciles and the EPC measures); otherwise high is bad.
 - The thirds are stored in feature state (`<dataset>:<measure>:third`), so changing the pair only changes the paint expression. Areas without both values are grey.
 - The pair is in the address: `#bi=deprivation.imd,fuelpoverty.lsoa` (with an area code too: `#E01000001&bi=…`).
-- The legend (`js/legendgrid.js`, drawn as SVG on screen and as vectors in the PDF) is a borderless grid with arrows up and right from the bottom-left corner, "best on both" / "worst on both" at the corners, and the two measures' names on the left and below.
-- Modes (Compare two measures, Deprivation, Fuel poverty, Energy efficiency) are chosen with a radio button; only the chosen mode's measures, selectors and opacity slider are active.
+- The legend (`js/legendgrid.js`, drawn as SVG on screen and as vectors in the PDF) is a borderless grid with an arrow up its left side and one along its bottom (they don't meet), "best on both" / "worst on both" at the corners, the vertical measure's name as right-aligned horizontal text beside its arrow and the horizontal one below.
+- Modes (Compare two measures, Deprivation, Fuel poverty, Energy efficiency) are chosen with a radio button; only the chosen mode's measures, selectors and opacity slider are active. Choosing a mode unfolds its group and folds the others; folding by hand still works.
 
 ## PDF export
 
