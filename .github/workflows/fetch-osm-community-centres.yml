@@ -1,4 +1,4 @@
-# Downloads UK community centres from OSM as they stood on 1 January of each year (Overpass API)
+# Downloads UK community centres from OSM as they stood on 1 January of each year (Geofabrik dated extracts, processed with osmium)
 # and keeps the result as a workflow artifact for 30 days. Runs on GitHub's servers, which can reach the API.
 # Trigger: push to this branch touching the script/workflow, or "Run workflow" in the Actions tab.
 name: Fetch OSM community centres
@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool && pip install shapely
       - name: Download OSM snapshots
         run: |
           python tools/fetch_osm_community_centres.py \

@@ -1,99 +1,88 @@
 #!/usr/bin/env python3
 """
-Step 1.1a: OSM community centres across the UK, as they stood on 1 January of each year.
+Step 1.1a: community centres in OpenStreetMap as they stood on 1 January of each year.
 
-For each date, asks the Overpass API (which keeps OSM's history) for every feature tagged
-amenity=community_centre / social_centre, plus those carrying a disused:/was:/abandoned:
-amenity tag (how mappers mark a closed centre). Works out nothing: stock, closures and
-openings are computed afterwards by tools/build_community_closures.py.
+Source: Geofabrik's dated extracts (great-britain-YY0101.osm.pbf and
+ireland-and-northern-ireland-YY0101.osm.pbf, ODbL). Needs the `osmium` command-line tool
+(apt install osmium-tool) and shapely. The all-UK Overpass route was dropped: the public
+server returned empty answers for whole-UK historic queries.
 
-(The ohsome full-history API was tried first and rejects a UK-wide request as too large.)
+Kept: amenity=community_centre|social_centre, plus the lifecycle forms
+disused:/was:/abandoned: amenity (a tagged closure). The Republic of Ireland part of the
+island extract is dropped later, when points are placed into UK zones.
 
-Usage:
-    pip install requests
-    python tools/fetch_osm_community_centres.py --start 2015 --end 2025
-
-Output: source/osm/osm_community_centres_snapshots.jsonl (source/ is git-ignored)
-        one line per feature per date:
-        {"date": "2015-01-01", "osm_id": "node/123", "lat": .., "lon": .., "tags": {...}}
-        (ways and relations use Overpass's centre point)
-
-Data (c) OpenStreetMap contributors, ODbL. Keep that attribution on the finished map.
+Usage:  python tools/fetch_osm_community_centres.py --start 2015 --end 2025
+Output: source/osm/osm_community_centres_snapshots.jsonl, one line per feature per date:
+        {"date","osm_id","lat","lon","tags"}   (osm_id like n123 / w456 / r789)
 """
 import argparse
 import json
-import time
+import subprocess
+import urllib.request
 from pathlib import Path
 
-import requests
+from shapely.geometry import shape
 
-ENDPOINT = "https://overpass-api.de/api/interpreter"
-H = {"User-Agent": "portrait-of-a-nation data build (github.com/i-blazevicius/portrait-of-a-nation)"}
-UK_RELATION = 62149  # the United Kingdom; area ids are the relation id + 3600000000
-
-VALUES = "^(community_centre|social_centre)$"
+REGIONS = ["great-britain", "ireland-and-northern-ireland"]
+FILTERS = [f"nwr/{k}={v}" for k in ("amenity", "disused:amenity", "was:amenity", "abandoned:amenity")
+           for v in ("community_centre", "social_centre")]
+VALUES = {"community_centre", "social_centre"}
 KEYS = ("amenity", "disused:amenity", "was:amenity", "abandoned:amenity")
 
 
-def query(date: str) -> str:
-    parts = "\n".join(f'  nwr["{k}"~"{VALUES}"](area.uk);' for k in KEYS)
-    return (
-        f'[out:json][timeout:600][date:"{date}T00:00:00Z"];\n'
-        f"area({3600000000 + UK_RELATION})->.uk;\n(\n{parts}\n);\nout center tags qt;"
-    )
-
-
-def fetch(date: str, retries: int = 6) -> list:
-    for attempt in range(1, retries + 1):
-        try:
-            r = requests.post(ENDPOINT, data={"data": query(date)}, headers=H, timeout=(30, 900))
-            if r.status_code == 200:
-                return r.json()["elements"]
-            print(f"  {date}: HTTP {r.status_code}, attempt {attempt}: {r.text[:200]!r}", flush=True)
-        except (requests.RequestException, ValueError) as exc:
-            print(f"  {date}: {exc}, attempt {attempt}", flush=True)
-        time.sleep(30 * attempt)
-    raise SystemExit(f"giving up on {date}")
+def run(cmd):
+    print("+", " ".join(cmd), flush=True)
+    subprocess.run(cmd, check=True)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", type=int, default=2015)
     ap.add_argument("--end", type=int, default=2025)
+    ap.add_argument("--years", help="comma list, overrides start/end, e.g. 2015,2020,2025")
     ap.add_argument("--out", default="source/osm")
     args = ap.parse_args()
+    years = [int(y) for y in args.years.split(",")] if args.years else range(args.start, args.end + 1)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    tmp = out / "tmp"
+    tmp.mkdir(exist_ok=True)
     path = out / "osm_community_centres_snapshots.jsonl"
-    total = 0
     with path.open("w", encoding="utf-8") as fh:
-        for year in range(args.start, args.end + 1):
+        for year in years:
             date = f"{year}-01-01"
-            elements = fetch(date)
-            n = 0
-            for e in elements:
-                c = e if e["type"] == "node" else e.get("center")
-                if not c:
-                    continue
-                fh.write(
-                    json.dumps(
-                        {
-                            "date": date,
-                            "osm_id": f'{e["type"]}/{e["id"]}',
-                            "lat": c["lat"],
-                            "lon": c["lon"],
-                            "tags": e.get("tags", {}),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-                n += 1
-            total += n
-            print(f"{date}: {n} features", flush=True)
-            time.sleep(10)  # be kind to the public server
-    print(f"done: {total} rows -> {path}")
+            n_year = 0
+            for region in REGIONS:
+                src = tmp / f"{region}-{year}.osm.pbf"
+                url = f"https://download.geofabrik.de/europe/{region}-{str(year)[2:]}0101.osm.pbf"
+                print(f"{date} {region}: downloading {url}", flush=True)
+                urllib.request.urlretrieve(url, src)
+                filt = tmp / "filtered.osm.pbf"
+                gj = tmp / "filtered.geojsonseq"
+                run(["osmium", "tags-filter", "--overwrite", "-o", str(filt), str(src), *FILTERS])
+                run(["osmium", "export", "--overwrite", "-f", "geojsonseq", "-o", str(gj), str(filt)])
+                src.unlink()
+                with gj.open(encoding="utf-8") as g:
+                    for line in g:
+                        line = line.strip().lstrip("\x1e")
+                        if not line:
+                            continue
+                        f = json.loads(line)
+                        tags = f.get("properties") or {}
+                        if not any(tags.get(k) in VALUES for k in KEYS):
+                            continue
+                        try:
+                            p = shape(f["geometry"]).representative_point()
+                        except Exception:
+                            continue
+                        fh.write(json.dumps({"date": date, "osm_id": str(f.get("id", "")),
+                                             "lat": round(p.y, 6), "lon": round(p.x, 6),
+                                             "tags": tags}, ensure_ascii=False) + "\n")
+                        n_year += 1
+            fh.flush()
+            print(f"{date}: {n_year} features", flush=True)
+    print("done ->", path)
 
 
 if __name__ == "__main__":
