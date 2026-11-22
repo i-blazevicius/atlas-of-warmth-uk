@@ -58,8 +58,6 @@ def fetch_window(t0: str, t1: str, out_fh, seen: set, retries: int = 3) -> int:
         "filter": FILTER,
         "time": f"{t0},{t1}",
         "properties": "tags,metadata",
-        "showMetadata": "true",
-        "format": "geojson",
     }
     for attempt in range(1, retries + 1):
         try:
