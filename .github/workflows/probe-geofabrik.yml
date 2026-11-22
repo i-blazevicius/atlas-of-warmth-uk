@@ -7,15 +7,16 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Head requests for dated snapshots
+      - name: Download speed (20 s sample of the 2025 GB file)
         run: |
-          for y in 15 20 25; do
-            for r in europe/great-britain europe/ireland-and-northern-ireland; do
-              u="https://download.geofabrik.de/${r}-${y}0101.osm.pbf"
-              echo "$u $(curl -sIL -m 30 "$u" | grep -E "^HTTP|^location" | tr "\n" " " | tr -d '\r') $(curl -sIL -m 30 "$u" | grep -i "^content-length" | tail -1 | tr -d "\r")"
-            done
-          done
-      - name: Overpass status
-        run: curl -s -m 30 https://overpass-api.de/api/status | head -12
+          curl -sL -m 20 -o /tmp/sample.pbf -w "bytes=%{size_download} speed=%{speed_download} B/s\n" https://download.geofabrik.de/europe/great-britain-250101.osm.pbf || true
+      - name: Time a full small download (NI 2015, ~87 MB)
+        run: |
+          /usr/bin/time -v curl -sL -m 300 -o /tmp/ni15.pbf https://download.geofabrik.de/europe/ireland-and-northern-ireland-150101.osm.pbf 2>&1 | grep -E "Elapsed|Maximum" ; ls -l /tmp/ni15.pbf
+      - name: Time osmium filter
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+          time osmium tags-filter -o /tmp/f.pbf /tmp/ni15.pbf nwr/amenity=community_centre,social_centre
+          time osmium export -f geojsonseq -o /tmp/f.gj /tmp/f.pbf; wc -l /tmp/f.gj
