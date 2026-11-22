@@ -702,6 +702,7 @@ function buildExportControls() {
   inner.append(
     field('<label><input type="radio" name="exp-mode" value="view" checked><span>Current view</span></label>'),
     field('<label><input type="radio" name="exp-mode" value="uk"><span>Whole UK</span></label>'),
+    field('<label title="Reads the full-resolution boundaries, screen by screen: slower, bigger files"><input type="checkbox" id="exp-exact"><span>Exact shapes (slow)</span></label>'),
     field('<label>Paper <select id="exp-paper">' + Object.keys(PAPER_MM).map((p) => `<option${p === 'A3' ? ' selected' : ''}>${p}</option>`).join('') +
       '</select> <select id="exp-orient"><option value="landscape">landscape</option><option value="portrait">portrait</option></select></label>'),
     ...[['legend', 'Legend'], ['scale', 'Scale bar'], ['north', 'Compass'], ['basemap', 'Base map']]
@@ -715,7 +716,7 @@ function buildExportControls() {
     try {
       const r = await exportPdf({ mode: document.querySelector('input[name=exp-mode]:checked').value,
         ...(() => { const [a, b] = PAPER_MM[g('paper').value]; return g('orient').value === 'portrait' ? { widthMm: a, heightMm: b } : { widthMm: b, heightMm: a }; })(),
-        legend: g('legend').checked, scale: g('scale').checked, north: g('north').checked, basemap: g('basemap').checked });
+        exact: g('exact').checked, legend: g('legend').checked, scale: g('scale').checked, north: g('north').checked, basemap: g('basemap').checked });
       status.textContent = `Saved (${fmt(r.areas)} areas, ${(r.blob.size / 1e6).toFixed(1)} MB).`;
     } catch (e) { status.textContent = `The PDF could not be made: ${e.message}`; console.error(e); }
     btn.disabled = false;

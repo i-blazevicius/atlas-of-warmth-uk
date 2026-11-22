@@ -91,6 +91,7 @@ The "Export PDF" group in the control panel saves the map as a vector PDF (areas
 
 - The shapes are read back from the map at the zoom being exported and simplified lightly, so the PDF matches the screen. Detail follows the window size: a larger window gives a more detailed PDF.
 - Furniture is a fixed physical size on any paper: legend 100 mm wide (bottom left), compass 10 mm across with the scale bar beside it (bottom right), credits in one line underneath (shrunk to fit the page width). Outline weights are the live map's, in points, whatever the paper.
+- "Exact shapes (slow)" reads the full-resolution boundaries instead: the map visits the region one screen at a time at a high zoom (chosen from the paper size, at most 600 screens) and adds each screen's shapes to the PDF as they arrive, skipping pieces already seen. Whole UK took about 10 s on A3 (2.5 MB) and about 50 s on A0 (8 MB) in a headless test.
 - The base map is a picture (place names a separate transparent picture above the data), because it is drawn from tiles.
 - `js/pdf.js` is a small PDF writer (one page, Helvetica, opacity, images); `js/export.js` turns the map into a page; `js/scalebar.js` is the stepped scale bar shared with the live map.
 - Not included: the Doto face (Helvetica is used) and the selected-area highlight.

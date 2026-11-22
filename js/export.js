@@ -71,7 +71,7 @@ export function createExporter(ctx) {
   };
 
   async function exportPdf(opts) {
-    const o = { mode: 'view', widthMm: 297, heightMm: 210, legend: true, scale: true, north: true, basemap: true, ...opts };
+    const o = { mode: 'view', widthMm: 297, heightMm: 210, legend: true, scale: true, north: true, basemap: true, exact: false, ...opts };
     const dataset = state.active?.dataset, measure = state.active?.measure;
     const saved = { center: map.getCenter(), zoom: map.getZoom(), ratio: map.getPixelRatio?.() ?? window.devicePixelRatio };
     const bgColour = map.getPaintProperty('background', 'background-color');
@@ -164,6 +164,94 @@ export function createExporter(ctx) {
         await idle();                                           // the data layers must be drawn again before they are read back
       }
 
+      // ── Shapes, read back from the map and turned into page paths as they come (the map's own pieces are tile-sized, so
+      // pieces seen twice are skipped). Normal export reads the screen as it is; exact export visits the region at a high
+      // zoom one screen at a time, where the tiles hold the full-resolution boundaries.
+      const areaOps = [], lineOps = new Map(OUTLINES.map((ol) => [ol.id, []]));
+      const seen = new Set(), codes = new Set();
+      const proj = (coords) => coords.map(([lng, lat]) => { const [a1, b1] = px(lng, lat); return [X(a1), Y(b1)]; });
+      const harvest = () => {
+        if (dataset?.visible && measure) {
+          const byColour = new Map();
+          for (const a of AREA_SETS) {
+            if (map.getLayoutProperty(`fill-${a.id}`, 'visibility') === 'none') continue;
+            for (const f of map.queryRenderedFeatures({ layers: [`fill-${a.id}`] })) {
+              const code = f.id ?? f.properties?.[a.code];
+              const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [];
+              const colour = featureColour(dataset, measure, f.state ?? {});
+              for (const poly of polys) {
+                const ext = poly[0];
+                if (!ext?.length) continue;
+                const key = `${code}|${ext.length}|${ext[0]}|${ext[ext.length >> 1]}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const rings = [];
+                poly.forEach((ring, i) => {
+                  let pts = simplify(proj(ring), 0.1);
+                  if (pts.length < 4) return;
+                  const ar = area(pts);
+                  if (Math.abs(ar) < 0.002) return;
+                  if ((i === 0) !== (ar > 0)) pts = pts.reverse();      // exteriors one way, holes the other: pieces that overlap at tile edges still fill (non-zero rule)
+                  rings.push(pathOf(pts, true));
+                });
+                if (!rings.length) continue;
+                codes.add(code);
+                if (!byColour.has(colour)) byColour.set(colour, []);
+                byColour.get(colour).push(`${rings.join(' ')} f`);
+              }
+            }
+          }
+          for (const [c, paths] of byColour) areaOps.push(`${hexRgb(c)} rg ${paths.join(' ')}`);
+        }
+        if (state.outlinesOn) {
+          for (const ol of OUTLINES) {
+            if (!state.outlines[ol.id] || map.getLayoutProperty(`outline-${ol.id}`, 'visibility') === 'none') continue;
+            for (const f of map.queryRenderedFeatures({ layers: [`outline-${ol.id}`] })) {
+              const parts = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [];
+              for (const part of parts) {
+                const key = `${ol.id}|${part.length}|${part[0]}|${part[part.length >> 1]}|${part[part.length - 1]}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const pts = simplify(proj(part), 0.1);
+                if (pts.length > 1) lineOps.get(ol.id).push(pathOf(pts, false));
+              }
+            }
+          }
+        }
+      };
+      if (o.exact) {
+        const mz = Math.min(10, ...AREA_SETS.map((a) => map.getSource(`areas-${a.id}`)?.maxzoom ?? 10));
+        // Zoom: enough that one screen pixel is about 0.1 mm of paper or finer; fewer than 600 screens.
+        const merc2 = (b) => [x0 + b[0] / S, y0 + b[1] / S, x0 + b[2] / S, y0 + b[3] / S];
+        let region;
+        if (o.mode === 'uk') {
+          const [[w, s], [e, n]] = CONFIG.view.extent;
+          const [m0x, m0y] = merc(w, n), [m1x, m1y] = merc(e, s);
+          region = [m0x, m0y, m1x, m1y];
+        } else region = merc2([rect.x0, rect.y0, rect.x1, rect.y1]);
+        const grid = (ze) => {
+          const Se = 512 * 2 ** ze, vw = (cw / Se) * 0.9, vh = (ch / Se) * 0.9;
+          return { cols: Math.max(1, Math.ceil((region[2] - region[0]) / vw)), rows: Math.max(1, Math.ceil((region[3] - region[1]) / vh)) };
+        };
+        let ze = Math.min(mz, Math.max(z + 1, Math.ceil(z + Math.log2(k / 0.3))));
+        while (ze > z + 1 && (({ cols, rows }) => cols * rows)(grid(ze)) > 600) ze--;
+        const { cols, rows } = grid(ze);
+        const home = { center: map.getCenter(), zoom: z };
+        setVis(baseIds, 'none');
+        map.setPixelRatio?.(1);
+        const total = cols * rows;
+        let n = 0;
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+          setBusy(true, `Reading exact shapes… screen ${++n} of ${total}`);
+          const mxc = region[0] + ((c + 0.5) * (region[2] - region[0])) / cols, myc = region[1] + ((r + 0.5) * (region[3] - region[1])) / rows;
+          map.jumpTo({ center: [mxc * 360 - 180, (Math.atan(Math.sinh(Math.PI * (1 - 2 * myc))) * 180) / Math.PI], zoom: ze });
+          await idle();
+          harvest();
+        }
+        map.jumpTo(home);
+        restore();
+      } else harvest();
+
       // ── Draw: everything map-like is clipped to the map ──
       pdf.op(`q ${num(mx)} ${num(H - my - mapH)} ${num(mapW)} ${num(mapH)} re W n`);
       pdf.op(`q 1 1 1 rg ${num(mx)} ${num(H - my - mapH)} ${num(mapW)} ${num(mapH)} re f Q`);
@@ -174,65 +262,23 @@ export function createExporter(ctx) {
         place(pdf.image({ width: bmp.width, height: bmp.height, jpeg: new Uint8Array(images.base) }));
       }
 
-      // Areas: one path per area, grouped by colour so the colour is set once per group.
-      let drawn = 0;
-      if (dataset?.visible && measure) {
-        const groups = new Map();
-        for (const a of AREA_SETS) {
-          if (map.getLayoutProperty(`fill-${a.id}`, 'visibility') === 'none') continue;
-          const byCode = new Map();
-          for (const f of map.queryRenderedFeatures({ layers: [`fill-${a.id}`] })) {
-            const code = f.id ?? f.properties?.[a.code];
-            const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [];
-            let entry = byCode.get(code);
-            if (!entry) byCode.set(code, entry = { colour: featureColour(dataset, measure, f.state ?? {}), rings: [] });
-            for (const poly of polys) poly.forEach((ring, i) => {
-              let pts = simplify(ring.map(([lng, lat]) => { const [a1, b1] = px(lng, lat); return [X(a1), Y(b1)]; }), 0.1);
-              if (pts.length < 4) return;
-              const ar = area(pts);
-              if (Math.abs(ar) < 0.002) return;
-              if ((i === 0) !== (ar > 0)) pts = pts.reverse();      // exteriors one way, holes the other: pieces that overlap at tile edges still fill (non-zero rule)
-              entry.rings.push(pts);
-            });
-          }
-          for (const { colour, rings } of byCode.values()) {
-            if (!rings.length) continue;
-            if (!groups.has(colour)) groups.set(colour, []);
-            groups.get(colour).push(rings);
-            drawn++;
-          }
-        }
+      // Areas (colour set once per group), then the outlines: a white casing and the line, for each visible level, as on
+      // screen. Outline widths are the live map's pixel widths turned into points (0.75 pt a pixel) whatever the paper size.
+      if (areaOps.length) {
         pdf.op(`/${pdf.opacity(dataset.opacity ?? 0.8)} gs`);
-        for (const [colour, areas] of groups) {
-          pdf.op(`${hexRgb(colour)} rg`);
-          for (const rings of areas) pdf.op(`${rings.map((r) => pathOf(r, true)).join(' ')} f`);
-        }
+        for (const op of areaOps) pdf.op(op);
         pdf.op(`/${pdf.opacity(1)} gs`);
       }
-
-      // Outlines: a white casing, then the line, for each visible level, as on screen. Widths are the live map's
-      // pixel widths turned into points (0.75 pt a pixel) whatever the paper size, so the lines keep the weight they have on screen.
       const lerp = (v0, v1, t) => v0 + (v1 - v0) * Math.min(1, Math.max(0, t));
-      if (state.outlinesOn) {
-        for (const ol of OUTLINES) {
-          if (!state.outlines[ol.id] || map.getLayoutProperty(`outline-${ol.id}`, 'visibility') === 'none') continue;
-          const fade = lerp(0, 1, (z - ol.from) / 0.8);
-          const t = (z - 5) / 7;
-          const lines = [];
-          for (const f of map.queryRenderedFeatures({ layers: [`outline-${ol.id}`] })) {
-            const parts = f.geometry.type === 'LineString' ? [f.geometry.coordinates] : f.geometry.type === 'MultiLineString' ? f.geometry.coordinates : [];
-            for (const part of parts) {
-              const pts = simplify(part.map(([lng, lat]) => { const [a1, b1] = px(lng, lat); return [X(a1), Y(b1)]; }), 0.1);
-              if (pts.length > 1) lines.push(pathOf(pts, false));
-            }
-          }
-          if (!lines.length) continue;
-          const casingW = lerp(ol.width[0] + 2, ol.width[1] + 3, t) * 0.75, lineW = lerp(ol.width[0], ol.width[1], t) * 0.75;
-          pdf.op(`1 J 1 j /${pdf.opacity(0.85 * fade, true)} gs 1 1 1 RG ${num(casingW)} w ${lines.join(' ')} S`);
-          pdf.op(`/${pdf.opacity(fade, true)} gs ${hexRgb(ol.color)} RG ${num(lineW)} w ${lines.join(' ')} S`);
-        }
-        pdf.op(`/${pdf.opacity(1)} gs /${pdf.opacity(1, true)} gs`);
+      for (const ol of OUTLINES) {
+        const lines = lineOps.get(ol.id);
+        if (!lines.length) continue;
+        const fade = lerp(0, 1, (z - ol.from) / 0.8), t = (z - 5) / 7;
+        const casingW = lerp(ol.width[0] + 2, ol.width[1] + 3, t) * 0.75, lineW = lerp(ol.width[0], ol.width[1], t) * 0.75;
+        pdf.op(`1 J 1 j /${pdf.opacity(0.85 * fade, true)} gs 1 1 1 RG ${num(casingW)} w ${lines.join(' ')} S`);
+        pdf.op(`/${pdf.opacity(fade, true)} gs ${hexRgb(ol.color)} RG ${num(lineW)} w ${lines.join(' ')} S`);
       }
+      pdf.op(`/${pdf.opacity(1)} gs /${pdf.opacity(1, true)} gs`);
       if (images.labels) place(pdf.image(images.labels));
       pdf.op('Q');
 
@@ -296,7 +342,7 @@ export function createExporter(ctx) {
       }
 
       const blob = await pdf.build();
-      return { blob, areas: drawn, pageMm: [o.widthMm, o.heightMm] };
+      return { blob, areas: codes.size, pageMm: [o.widthMm, o.heightMm] };
     } finally {
       restore();
       map.setPaintProperty('background', 'background-color', bgColour);
