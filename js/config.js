@@ -130,7 +130,7 @@ export default {
       opacity: 0.8,
       // Measures that are a rate, not a decile: coloured in classes. `breaks` are the class edges in the measure's unit, one list per
       // nation (the same colours, but each nation's own edges: the definitions differ, so areas are only compared within a nation).
-      classes: { breaks: { E: [8, 10, 12, 14, 16], S: [26, 29, 32, 35, 38] }, colours: ['#ffffcc', '#c7e9b4', '#7fcdbb', '#41b6c4', '#2c7fb8', '#253494'], unit: '%' },
+      classes: { breaks: { E: [8, 10, 12, 14, 16], S: [26, 29, 32, 35, 38] }, colours: ['#f2f6b4', '#c7e9b4', '#7fcdbb', '#41b6c4', '#2c7fb8', '#253494'], unit: '%' },
       note: 'Share of households in fuel poverty. The definitions differ (England: low income and an energy-inefficient home; Scotland: fuel costs above 10% of income, after housing costs), so each nation has its own class edges: compare areas within a nation only. Wales and Northern Ireland publish no figures for small areas.',
       sources: {
         E: 'Sub-regional fuel poverty in England, 2026 report (2024 data), Department for Energy Security and Net Zero. Modelled from the English Housing Survey.',
@@ -164,16 +164,16 @@ export default {
           counts: ['epc count', 'epc homes'],
           names: { E: 'Median EPC score (higher = more efficient)', W: 'Median EPC score (higher = more efficient)', S: 'Median EPC score (higher = more efficient)' },
           classes: { breaks: { E: [62, 65, 68, 71, 74], W: [62, 65, 68, 71, 74], S: [66, 68, 70, 72, 74] },
-                     colours: ['#e6ee9c', '#c5e38f', '#9fd284', '#6fbb78', '#2f9b55', '#006837'] } },
+                     colours: ['#f2f6c0', '#c5e38f', '#9fd284', '#6fbb78', '#2f9b55', '#006837'] } },
         { id: 'bandc', label: 'Homes in band C or above', kind: 'rate', value: 'epc band c', rank: null, areas: ['lsoa', 'dz', 'lad'], where: { lad: ['N'] }, unit: '%',
           counts: ['epc count', 'epc homes'],
           names: { E: 'Homes rated band C or above', W: 'Homes rated band C or above', S: 'Homes rated band C or above', N: 'Homes with an EPC rated band C or above' },
           classes: { breaks: { E: [30, 40, 50, 60, 70], W: [30, 40, 50, 60, 70], S: [40, 50, 60, 70, 80], N: [30, 33, 36, 38, 41] },
-                     colours: ['#e6ee9c', '#c5e38f', '#9fd284', '#6fbb78', '#2f9b55', '#006837'] } },
+                     colours: ['#f2f6c0', '#c5e38f', '#9fd284', '#6fbb78', '#2f9b55', '#006837'] } },
         { id: 'co2', label: 'Median CO₂ emissions', kind: 'rate', value: 'epc co2', rank: null, areas: ['lsoa', 'dz', 'soa'], decimals: 1,
           counts: ['epc count', 'epc homes'],
           names: { E: 'Median CO₂ (tonnes a year)', W: 'Median CO₂ (tonnes a year)', S: 'Median CO₂ (tonnes a year)' },
-          classes: { breaks: [2.5, 3, 3.5, 4, 4.5], colours: ['#006837', '#2f9b55', '#6fbb78', '#9fd284', '#c5e38f', '#e6ee9c'], unit: ' t' } },
+          classes: { breaks: [2.5, 3, 3.5, 4, 4.5], colours: ['#006837', '#2f9b55', '#6fbb78', '#9fd284', '#c5e38f', '#f2f6c0'], unit: ' t' } },
       ],
     },
   ],
