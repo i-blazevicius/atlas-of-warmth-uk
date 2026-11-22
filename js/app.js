@@ -8,6 +8,8 @@ const Styles = await import(`./styles.js${q}`);
 const { scaleModel, thinLabels } = await import(`./scalebar.js${q}`);
 const core = createCore(CONFIG);
 const { state, esc, fail, problem, resolveColumns, loadCSV } = core;
+state.hashCode = '';
+state.bi = null;             // the comparison of two measures (see buildBiControls)
 state.selected = null;       // the open area's code, e.g. E01000001
 state.datasets = [];         // loaded datasets (see loadDataset)
 state.active = null;         // { dataset, measure }: what colours the map
@@ -209,8 +211,42 @@ async function loadDataset(cfg) {
 // Writes every area's value for every measure into feature state, once, so that switching measure
 // only changes the paint expression (no per-area work).
 const stateKey = (ds, m) => `${ds.id}:${m.id}`;
+// Each measure's "third" for every area (0 = best third … 2 = worst third), worked out inside the area's own nation, for
+// comparing two measures. Ties share one third by the middle of their rank, so ten equal-sized deciles split 3 / 4 / 3.
+function computeThirds(ds) {
+  ds.third = new Map();
+  for (const m of ds.measures) {
+    const worseLow = m.worse ? m.worse === 'low' : m.kind !== 'rate';
+    const byNation = new Map();
+    for (const [code, r] of ds.byCode) {
+      const set = areaSetOf(code);
+      if (!set) continue;
+      const nation = String(r[ds.col.nation] ?? '').trim();
+      if (m.names && !m.names[nation]) continue;
+      if (m.areas ? !m.areas.includes(set.id) : set.optional) continue;
+      const raw = r[ds.col[`v:${m.id}`]], v = Number(raw);
+      if (raw === '' || raw == null || !Number.isFinite(v)) continue;
+      if (!byNation.has(nation)) byNation.set(nation, []);
+      byNation.get(nation).push([code, worseLow ? -v : v]);
+    }
+    const out = new Map();
+    for (const list of byNation.values()) {
+      list.sort((a, b) => a[1] - b[1]);
+      const N = list.length;
+      for (let i = 0; i < N;) {
+        let j = i;
+        while (j < N && list[j][1] === list[i][1]) j++;
+        const f = (i + j) / 2 / N, t = f < 1 / 3 ? 0 : f < 2 / 3 ? 1 : 2;
+        for (let k = i; k < j; k++) out.set(list[k][0], t);
+        i = j;
+      }
+    }
+    ds.third.set(m.id, out);
+  }
+}
 function applyData(ds) {
   const t0 = performance.now();
+  computeThirds(ds);
   for (const [code, r] of ds.byCode) {
     const a = areaSetOf(code);
     if (!a) { const n = String(r[ds.col.nation] ?? '?'); ds.unmapped[n] = (ds.unmapped[n] ?? 0) + 1; continue; }
@@ -219,6 +255,8 @@ function applyData(ds) {
       const v = Number(r[ds.col[`v:${m.id}`]]);
       if (r[ds.col[`v:${m.id}`]] === '' || !Number.isFinite(v)) continue;
       st[stateKey(ds, m)] = v;
+      const th = ds.third.get(m.id)?.get(code);
+      if (th !== undefined) st[`${stateKey(ds, m)}:third`] = th;
       if (m.kind === 'rate') st[`${stateKey(ds, m)}:class`] = classIndex(classesOf(ds, m), String(r[ds.col.nation] ?? '').trim(), v);
     }
     map.setFeatureState({ source: `areas-${a.id}`, sourceLayer: a.layer, id: code }, st);
@@ -246,7 +284,16 @@ function classIndex(cl, nation, v) {
 const classColour = (cl, nation, v) => cl.colours[classIndex(cl, nation, v)];
 // A rate measure's number as shown: its unit and decimals (m.unit, m.decimals), e.g. "34%" or "68".
 const showRate = (cl, m, v) => `${v.toFixed(m.decimals ?? 0)}${m.unit ?? cl.unit ?? ''}`;
+const biColours = () => CONFIG.bivariate?.colours ?? [['#64acbe', '#627f8c', '#574249'], ['#b0d5df', '#ad9ea5', '#985356'], ['#e8e8e8', '#e4acac', '#c85a5a']];
+const biColour = (tx, ty) => biColours()[2 - ty][tx];                 // tx: third on the horizontal measure, ty: on the vertical one
 function fillExpression(ds, m) {
+  if (m.kind === 'bivariate') {
+    const third = (x) => ['coalesce', ['feature-state', `${stateKey(x.ds, x.m)}:third`], -100];
+    const match = ['match', ['+', ['*', 3, third(m.a)], third(m.b)]];
+    for (let tx = 0; tx < 3; tx++) for (let ty = 0; ty < 3; ty++) match.push(tx * 3 + ty, biColour(tx, ty));
+    match.push(NO_DATA);
+    return match;
+  }
   if (m.kind === 'rate') {
     const match = ['match', ['coalesce', ['feature-state', `${stateKey(ds, m)}:class`], -1]];
     classesOf(ds, m).colours.forEach((c, i) => match.push(i, c));
@@ -300,12 +347,63 @@ function scaleControl() {
 }
 
 function setActive(ds, measure) {
+  if (state.bi) { state.bi.ds.visible = false; const on = $('bi-on'); if (on) on.checked = false; }
   state.active = { dataset: ds, measure };
   paintMap();
   renderLegend();
   if (state.selected) openArea(state.selected);
   for (const input of document.querySelectorAll('input[data-measure]')) input.checked = input.dataset.ds === ds.id && input.value === measure.id;
+  syncHash();
 }
+
+// ── Compare two measures ───────────────────────────────────
+// A virtual dataset whose single measure colours each area by its third on two real measures: `a` across (the
+// horizontal axis), `b` up. It is the active layer while switched on, like any other measure.
+const allMeasures = () => state.datasets.flatMap((ds) => ds.measures.map((m) => ({ ds, m })));
+const measureId = (x) => `${x.ds.id}.${x.m.id}`;
+// A measure's name with its dataset when the measure's own label would be unclear alone ("LSOAs" → "Fuel poverty: LSOAs").
+const fullLabel = (x) => (x.m.label.toLowerCase().includes(x.ds.label.toLowerCase()) ? x.m.label : `${x.ds.label}: ${x.m.label}`);
+const pairCache = new Map();
+// How many areas have a third on both measures, and which nations they are in.
+function pairInfo(a, b) {
+  const key = `${measureId(a)}|${measureId(b)}`;
+  if (!pairCache.has(key)) {
+    const ta = a.ds.third.get(a.m.id), tb = b.ds.third.get(b.m.id), nations = new Set();
+    let n = 0;
+    if (ta && tb) for (const code of ta.keys()) if (tb.has(code)) { n++; nations.add(String(a.ds.byCode.get(code)?.[a.ds.col.nation] ?? '').trim()); }
+    pairCache.set(key, { n, nations });
+  }
+  return pairCache.get(key);
+}
+const biAvailable = (a, b) => measureId(a) !== measureId(b) && pairInfo(a, b).n > 0;
+function makeBiMeasure(a, b) {
+  const setsOf = (x) => x.m.areas ?? AREA_SETS.filter((s) => !s.optional).map((s) => s.id);
+  const areas = setsOf(a).filter((id) => setsOf(b).includes(id));
+  const where = {};
+  for (const id of areas) {
+    const wa = a.m.where?.[id], wb = b.m.where?.[id];
+    if (wa && wb) where[id] = wa.filter((n) => wb.includes(n)); else if (wa || wb) where[id] = wa ?? wb;
+  }
+  return { id: 'bivariate', kind: 'bivariate', label: `${fullLabel(a)} × ${fullLabel(b)}`, a, b, areas, where, nations: pairInfo(a, b).nations };
+}
+function showBi() {
+  const bi = state.bi;
+  if (state.active?.dataset !== bi.ds) bi.prev = state.active;
+  bi.ds.visible = true;
+  state.active = { dataset: bi.ds, measure: makeBiMeasure(bi.a, bi.b) };
+  paintMap();
+  renderLegend();
+  if (state.selected) openArea(state.selected);
+  for (const input of document.querySelectorAll('input[data-measure]')) input.checked = false;
+  const on = $('bi-on'); if (on) on.checked = true;
+  syncHash();
+}
+function hideBi() {
+  const bi = state.bi, p = bi.prev ?? { dataset: state.datasets[0], measure: state.datasets[0].measures[0] };
+  setActive(p.dataset, p.measure);
+}
+const thirdWords = ['best third', 'middle third', 'worst third'];
+
 
 // ── Control panel ──────────────────────────────────────────
 // Nations that have a measure, as a short note ("Wales, Scotland") when not all of them do.
@@ -396,11 +494,74 @@ function buildDatasetControls() {
   }
 }
 
+function buildBiControls() {
+  const box = $('bivariate-controls');
+  box.innerHTML = '';
+  const opts = allMeasures();
+  if (opts.length < 2) return;
+  const a0 = opts[0];
+  const b0 = opts.find((x) => x.ds !== a0.ds && biAvailable(a0, x)) ?? opts.find((x) => biAvailable(a0, x));
+  state.bi = { ds: { id: 'bivariate', label: 'Compare two measures', visible: false, opacity: 0.8, measures: [], virtual: true }, a: a0, b: b0, prev: null };
+  const group = Object.assign(document.createElement('details'), { className: 'dataset', open: false });
+  const sum = document.createElement('summary');
+  const on = Object.assign(document.createElement('input'), { type: 'checkbox', id: 'bi-on' });
+  on.setAttribute('aria-label', 'Compare two measures');
+  on.addEventListener('change', () => (on.checked ? showBi() : hideBi()));
+  sum.append(on, Object.assign(document.createElement('span'), { className: 'dataset-label', textContent: 'Compare two measures' }),
+    slider(state.bi.ds.opacity, (v) => { state.bi.ds.opacity = v; paintMap(); }, 'Comparison opacity'));
+  const body = Object.assign(document.createElement('div'), { className: 'measures bi-body' });
+  const selects = {};
+  const mkSelect = (axis, text) => {
+    const row = Object.assign(document.createElement('label'), { className: 'bi-row' });
+    const sel = document.createElement('select');
+    sel.id = `bi-${axis}`;
+    for (const ds of state.datasets) {
+      const g = Object.assign(document.createElement('optgroup'), { label: ds.label });
+      for (const m of ds.measures) g.append(Object.assign(document.createElement('option'), { value: measureId({ ds, m }), textContent: m.label }));
+      sel.append(g);
+    }
+    selects[axis] = sel;
+    row.append(Object.assign(document.createElement('span'), { textContent: text }), sel);
+    return row;
+  };
+  const byId = (id) => opts.find((x) => measureId(x) === id);
+  // A choice is greyed out (and cannot be picked) when it is the other axis's measure or shares no area with it.
+  const refresh = () => {
+    selects.x.value = measureId(state.bi.a); selects.y.value = measureId(state.bi.b);
+    for (const [axis, other] of [['x', state.bi.b], ['y', state.bi.a]]) {
+      for (const o of selects[axis].options) { const x = byId(o.value); o.disabled = !(axis === 'x' ? biAvailable(x, other) : biAvailable(other, x)); }
+    }
+  };
+  const swap = Object.assign(document.createElement('button'), { type: 'button', className: 'bi-swap', textContent: '⇅ Swap', title: 'Swap the two measures' });
+  body.append(mkSelect('x', 'Across'), mkSelect('y', 'Up'), swap);
+  selects.x.addEventListener('change', () => { state.bi.a = byId(selects.x.value); refresh(); showBi(); });
+  selects.y.addEventListener('change', () => { state.bi.b = byId(selects.y.value); refresh(); showBi(); });
+  swap.addEventListener('click', () => { [state.bi.a, state.bi.b] = [state.bi.b, state.bi.a]; refresh(); showBi(); });
+  state.bi.refresh = refresh;
+  state.bi.set = (ida, idb) => {                                    // from a link; false when the pair is not available
+    const a = byId(ida), b = byId(idb);
+    if (!a || !b || !biAvailable(a, b)) return false;
+    state.bi.a = a; state.bi.b = b; refresh();
+    return true;
+  };
+  group.append(sum, body);
+  box.append(group);
+  refresh();
+}
+
 // ── Legend ─────────────────────────────────────────────────
 // What the legend says, as data: used for the on-screen legend and the PDF.
 function legendModel() {
   const { dataset: ds, measure } = state.active ?? {};
   if (!ds || !ds.visible) return null;
+  if (measure.kind === 'bivariate') {
+    const { a, b } = measure, ns = Object.keys(NATIONS).filter((n) => measure.nations.has(n));
+    const colours = [2, 1, 0].map((ty) => [0, 1, 2].map((tx) => biColour(tx, ty)));       // rows from the top (worst vertical) down
+    return { title: ['Two measures compared', ns.length < Object.keys(NATIONS).length ? `${ns.map((n) => NATIONS[n]).join(', ')} only` : ''].filter(Boolean),
+      head: '', rows: [{ colour: NO_DATA, label: 'No data' }],
+      grid: { colours, x: `${fullLabel(a)} (best to worst)`, y: `${fullLabel(b)} (best to worst)` },
+      note: 'Each area is placed in the best, middle or worst third of its own nation on each measure, so nations are never compared with each other. The darkest colour is in the worst third on both.' };
+  }
   const cov = coverage(ds, measure);
   const title = [measure.label, `${ds.label}${cov ? ` · ${cov} only` : ''}`];
   let head = '', rows;
@@ -428,6 +589,7 @@ function renderLegend() {
   $('furniture').hidden = !lg;
   if (!lg) return;
   $('legend').innerHTML = `<p class="legend-title">${lg.title.map(esc).join('<br>')}</p>` +
+    (lg.grid ? `<div class="bigrid"><span class="bigrid-y">${esc(lg.grid.y)}</span><div class="bigrid-cells">${lg.grid.colours.flat().map((c) => `<i style="background:${esc(c)}"></i>`).join('')}</div><span class="bigrid-x">${esc(lg.grid.x)}</span></div>` : '') +
     (lg.head ? `<div class="legend-row legend-head"><i></i>${esc(lg.head)}</div>` : '') +
     lg.rows.map((r) => `<div class="legend-row"><i style="background:${esc(r.colour)}"></i>${esc(r.label)}</div>`).join('') +
     (lg.note ? `<p class="legend-note">${esc(lg.note)}</p>` : '');
@@ -442,6 +604,12 @@ function openArea(code) {
   let html = `<p class="area-code">${esc(code)}</p>`;
   if (!entries.length) {
     html += `<p class="area-name">${esc(code)}</p><p class="hint">${state.rows.has(code) ? 'Switch a dataset on to see its values here.' : 'No dataset has values for this area.'}</p>`;
+  }
+  const bm = state.active?.measure?.kind === 'bivariate' ? state.active.measure : null;
+  if (bm) {
+    const ta = bm.a.ds.third.get(bm.a.m.id)?.get(code), tb = bm.b.ds.third.get(bm.b.m.id)?.get(code), has = ta !== undefined && tb !== undefined;
+    html += `<p class="control-label">Comparison</p><div class="panel-measure current"><span class="block" style="background:${esc(has ? biColour(ta, tb) : NO_DATA)}"></span>` +
+      `<span class="name">${has ? `${esc(fullLabel(bm.a))}: ${thirdWords[ta]}<br>${esc(fullLabel(bm.b))}: ${thirdWords[tb]}` : 'Not both measures have a value for this area'}</span></div>`;
   }
   entries.forEach(({ dataset: ds, row }, i) => {
     const g = (k) => (ds.col[k] ? String(row[ds.col[k]] ?? '').trim() : '');
@@ -604,17 +772,33 @@ async function flyToArea(code) {
 // adds a step to the browser's history, so Back and Forward move between them, and any address can be
 // bookmarked or shared.
 let restoring = false;    // true while the page follows Back/Forward (so no new steps are added)
-function go(hash) {
-  if (restoring) return;
-  const want = hash ? `#${hash}` : '';
+// Besides an area code the address can carry `bi=<dataset.measure>,<dataset.measure>` for a comparison of two measures
+// (joined with &), e.g. #E01000001&bi=deprivation.overall,fuelpoverty.lsoa.
+function hashFor() {
+  const m = state.active?.measure;
+  return [state.hashCode, m?.kind === 'bivariate' ? `bi=${measureId(m.a)},${measureId(m.b)}` : ''].filter(Boolean).join('&');
+}
+function syncHash() {
+  if (restoring || !state.ready) return;
+  const h = hashFor(), want = h ? `#${h}` : '';
   if (location.hash === want) return;
   history.pushState(null, '', want || location.pathname + location.search);
 }
+function go(code) {
+  state.hashCode = code || '';
+  syncHash();
+}
 // Open whatever the address points to.
 function route() {
-  const code = decodeURIComponent(location.hash.slice(1));
+  const parts = decodeURIComponent(location.hash.slice(1)).split('&');
+  const code = parts.find(isAreaCode) ?? '', bi = parts.find((p) => p.startsWith('bi='))?.slice(3).split(',');
+  state.hashCode = code;
   restoring = true;
   try {
+    if (state.bi) {
+      if (bi?.length === 2 && state.bi.set(bi[0], bi[1])) showBi();
+      else if (state.active?.dataset === state.bi.ds) hideBi();
+    }
     if (isAreaCode(code)) { openArea(code); flyToArea(code); } else closeArea();
   } finally {
     restoring = false;
@@ -653,6 +837,7 @@ async function start() {
     applyData(ds);
   }
   buildDatasetControls();
+  buildBiControls();
   const first = state.datasets[0];
   if (first) setActive(first, first.measures[0]);
   const onMap = first ? first.byCode.size - Object.values(first.unmapped).reduce((s, n) => s + n, 0) : 0;
@@ -660,12 +845,17 @@ async function start() {
   await underlay;
   showProblems();
   if (location.hash) route();
+  state.ready = true;
 }
 start().catch(window.mapFail);
 
 // ── PDF export ─────────────────────────────────────────────
 // The colour an area has on screen, from its feature state (the same rule as the paint expression).
 function featureColour(ds, m, st) {
+  if (m.kind === 'bivariate') {
+    const ta = st[`${stateKey(m.a.ds, m.a.m)}:third`], tb = st[`${stateKey(m.b.ds, m.b.m)}:third`];
+    return ta == null || tb == null ? NO_DATA : biColour(ta, tb);
+  }
   if (m.kind === 'rate') {
     const i = st[`${stateKey(ds, m)}:class`];
     return i >= 0 && i != null ? classesOf(ds, m).colours[i] ?? NO_DATA : NO_DATA;

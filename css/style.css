@@ -208,3 +208,14 @@ input[type="range"]::-moz-range-thumb { width: 5px; height: 18px; background: va
 .export-status { margin: 4px 0 0; font-size: 12px; }
 .busy { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(255,255,255,.7); font-size: 16px; }
 .busy[hidden] { display: none; }
+
+/* Compare two measures */
+.bi-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.bi-row span { flex: none; width: 3.6em; color: var(--ink-dim); }
+.bi-row select { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 2px; border: 1px solid var(--panel-line); border-radius: 0; background: var(--panel-bg); color: var(--ink); }
+.bi-swap { margin: 2px 0 0 3.6em; font: inherit; font-size: 12px; cursor: pointer; }
+.bigrid { display: grid; grid-template-columns: auto 78px; justify-content: start; gap: 4px 6px; margin: 2px 0 8px; font-size: 11px; color: var(--ink-dim); }
+.bigrid-cells { display: grid; grid-template-columns: repeat(3, 26px); grid-auto-rows: 26px; }
+.bigrid-cells i { border: 1px solid var(--panel-line); }
+.bigrid-y { writing-mode: vertical-rl; transform: rotate(180deg); max-height: 78px; text-align: center; line-height: 1.25; }
+.bigrid-x { grid-column: 2; max-width: 150px; line-height: 1.25; }

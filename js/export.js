@@ -292,7 +292,7 @@ export function createExporter(ctx) {
       if (o.legend) {
         const lg = legendModel();
         if (lg) {
-          const bw = 100 * MM, pad = 3 * MM, inner = bw - 2 * pad;
+          const bw = 100 * MM, pad = 3 * MM, inner = bw - 2 * pad, lx = frame.x;
           let fs = 3.2 * MM;
           const swFor = (f) => f * 2.2;
           const widest = (f) => Math.max(...lg.rows.map((r) => swFor(f) + f * 0.7 + measureText(r.label, f)));
@@ -301,12 +301,28 @@ export function createExporter(ctx) {
           const titleLines = lg.title.flatMap((t, i) => wrap(t, fs, inner).map((l) => ({ l, bold: i === 0 })));
           const headLines = lg.head ? wrap(lg.head, fs, inner) : [];
           const noteLines = lg.note ? wrap(lg.note, fs * 0.9, inner) : [];
-          const h = pad * 2 + titleLines.length * fs * 1.3 + headLines.length * fs * 1.3 + lg.rows.length * row + (noteLines.length ? fs * 0.6 + noteLines.length * fs * 1.15 : 0);
-          const top = bottom - h, lx = frame.x;
+          // A comparison of two measures draws a 3 × 3 grid (10 mm cells) with its axis labels: the vertical one turned on its side.
+          const cs = 10 * MM, gf = fs * 0.9;
+          const yLines = lg.grid ? wrap(lg.grid.y, gf, 3 * cs) : [];
+          const gx = lx + pad + (yLines.length ? yLines.length * gf * 1.25 + fs * 0.4 : 0);
+          const xLines = lg.grid ? wrap(lg.grid.x, gf, bw - pad - (gx - lx)) : [];
+          const gridH = lg.grid ? 3 * cs + fs * 0.4 + xLines.length * gf * 1.25 + fs * 0.6 : 0;
+          const h = pad * 2 + gridH + titleLines.length * fs * 1.3 + headLines.length * fs * 1.3 + lg.rows.length * row + (noteLines.length ? fs * 0.6 + noteLines.length * fs * 1.15 : 0);
+          const top = bottom - h;
           pdf.op(`1 1 1 rg ${line} RG 0.6 w ${num(lx)} ${num(H - top - h)} ${num(bw)} ${num(h)} re B`);
           let y = top + pad;
           for (const t of titleLines) { text(t.l, lx + pad, y, fs, { bold: t.bold }); y += fs * 1.3; }
           for (const l of headLines) { text(l, lx + pad, y, fs, { colour: faint }); y += fs * 1.3; }
+          if (lg.grid) {
+            lg.grid.colours.forEach((rowColours, ri) => rowColours.forEach((c, ci) =>
+              pdf.op(`${hexRgb(c)} rg ${line} RG 0.4 w ${num(gx + ci * cs)} ${num(H - y - (ri + 1) * cs)} ${num(cs)} ${num(cs)} re B`)));
+            yLines.forEach((l, i) => {
+              const w = measureText(l, gf);
+              pdf.op(`BT ${faint} rg /F1 ${num(gf)} Tf 0 1 -1 0 ${num(lx + pad + (i + 0.85) * gf * 1.25)} ${num(H - y - 3 * cs + (3 * cs - w) / 2)} Tm ${showText(l)} ET`);
+            });
+            xLines.forEach((l, i) => text(l, gx, y + 3 * cs + fs * 0.4 + i * gf * 1.25, gf, { colour: faint }));
+            y += gridH;
+          }
           for (const r of lg.rows) {
             pdf.op(`${hexRgb(r.colour)} rg ${line} RG 0.4 w ${num(lx + pad)} ${num(H - y - row / 2 - sh / 2)} ${num(sw)} ${num(sh)} re B`);
             text(r.label, lx + pad + sw + fs * 0.7, y + row / 2 - fs * 0.5, fs);

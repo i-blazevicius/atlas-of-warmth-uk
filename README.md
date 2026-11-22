@@ -85,6 +85,15 @@ nations (NI councils come from the local authority tiles, which also hold other 
 differently in each nation and NI's figure is a different statistic, so each nation has its own edges: compare areas within a
 nation only.
 
+## Compare two measures
+
+"Compare two measures" in the control panel colours the map by two measures at once on a 3 × 3 grid (palette in `bivariate.colours` in `js/config.js`). Pick the measure for the horizontal axis ("Across") and the vertical one ("Up"); choices that share no area with the other axis, or are the same measure, are greyed out.
+
+- Each area is put in the best, middle or worst third of **its own nation** on each measure (`computeThirds` in `js/app.js`; ties share a third by the middle of their rank, so deciles split 3 / 4 / 3). The darkest cell is worst on both. A measure's `worse: 'low'` in the config marks a low number as the bad end (deprivation deciles and the EPC measures); otherwise high is bad.
+- The thirds are stored in feature state (`<dataset>:<measure>:third`), so changing the pair only changes the paint expression. Areas without both values are grey.
+- The pair is in the address: `#bi=deprivation.imd,fuelpoverty.lsoa` (with an area code too: `#E01000001&bi=…`).
+- The PDF export draws the 3 × 3 legend with its axis labels.
+
 ## PDF export
 
 The "Export PDF" group in the control panel saves the map as a vector PDF (areas, outlines, legend, scale bar, compass and credits are paths and text, so they stay sharp at any size). Choose the current view or the whole UK, a paper size (A4 to A0) and landscape or portrait.

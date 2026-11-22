@@ -72,6 +72,13 @@ export default {
     ],
   },
 
+  // Compare two measures: a 3 × 3 grid. Rows run from the best third of the vertical measure (bottom) to the worst (top),
+  // columns from the best third of the horizontal one (left) to the worst (right); the darkest cell is worst on both.
+  // A measure's `worse: 'low'` says a low number is the bad end (deprivation deciles and the EPC measures); otherwise high is bad.
+  bivariate: {
+    colours: [['#64acbe', '#627f8c', '#574249'], ['#b0d5df', '#ad9ea5', '#985356'], ['#e8e8e8', '#e4acac', '#c85a5a']],
+  },
+
   // The four nations, as they appear in the `nation` column of a dataset.
   nations: { E: 'England', W: 'Wales', S: 'Scotland', N: 'Northern Ireland' },
 
@@ -160,12 +167,12 @@ export default {
       },
       licence: 'Open Government Licence v3.0.',
       measures: [
-        { id: 'score', label: 'Median energy rating', kind: 'rate', value: 'epc score', rank: null, areas: ['lsoa', 'dz', 'soa'],
+        { id: 'score', label: 'Median energy rating', kind: 'rate', worse: 'low', value: 'epc score', rank: null, areas: ['lsoa', 'dz', 'soa'],
           counts: ['epc count', 'epc homes'],
           names: { E: 'Median EPC score (higher = more efficient)', W: 'Median EPC score (higher = more efficient)', S: 'Median EPC score (higher = more efficient)' },
           classes: { breaks: { E: [62, 65, 68, 71, 74], W: [62, 65, 68, 71, 74], S: [66, 68, 70, 72, 74] },
                      colours: ['#f2f6c0', '#c5e38f', '#9fd284', '#6fbb78', '#2f9b55', '#006837'] } },
-        { id: 'bandc', label: 'Homes in band C or above', kind: 'rate', value: 'epc band c', rank: null, areas: ['lsoa', 'dz', 'lad'], where: { lad: ['N'] }, unit: '%',
+        { id: 'bandc', label: 'Homes in band C or above', kind: 'rate', worse: 'low', value: 'epc band c', rank: null, areas: ['lsoa', 'dz', 'lad'], where: { lad: ['N'] }, unit: '%',
           counts: ['epc count', 'epc homes'],
           names: { E: 'Homes rated band C or above', W: 'Homes rated band C or above', S: 'Homes rated band C or above', N: 'Homes with an EPC rated band C or above' },
           classes: { breaks: { E: [30, 40, 50, 60, 70], W: [30, 40, 50, 60, 70], S: [40, 50, 60, 70, 80], N: [30, 33, 36, 38, 41] },
