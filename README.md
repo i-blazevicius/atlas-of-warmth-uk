@@ -32,8 +32,8 @@ map colours and the 10-class colour ramp (`map`). Settings it leaves out go back
   the PATH). Each rebuilt file adds its size to the repository's history, so don't rebuild casually.
 - **Outlines**: `data/tiles/outlines.pmtiles`, built by `python3 tools/build_outlines.py` from ONS Countries and Regions
   (Dec 2021, BGC) and Local Authority Districts (May 2026, BGC). Only borders between neighbouring areas are kept, so the
-  coast isn't traced twice. The **coastline** is a separate layer (the outer edge of the four nations, switched off by
-  default, listed first in the Outlines menu, drawn with the same thin line as local authorities); it includes Northern
+  coast isn't traced twice. The **coastline** is a separate layer (the outer edge of the four nations, on like the other
+  outlines, listed first in the Outlines menu, drawn with the same thin line as local authorities); it includes Northern
   Ireland's land border with Ireland.
   Each level has a white casing so it reads over dark colours; widths and colours in `js/config.js` → `outlines`.
 - **Values**: plain CSV keyed by area code, read by the page and written into each area's feature state once at load

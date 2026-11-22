@@ -585,7 +585,7 @@ function legendModel() {
     const colours = [2, 1, 0].map((ty) => [0, 1, 2].map((tx) => biColour(tx, ty)));       // rows from the top (worst vertical) down
     return { title: ['Two measures compared', ns.length < Object.keys(NATIONS).length ? `${ns.map((n) => NATIONS[n]).join(', ')} only` : ''].filter(Boolean),
       head: '', rows: [{ colour: NO_DATA, label: 'No data' }],
-      grid: { colours, x: `${fullLabel(a)} (best to worst)`, y: `${fullLabel(b)} (best to worst)` },
+      grid: { colours, x: fullLabel(a), y: fullLabel(b) },
       note: 'Each area is placed in the best, middle or worst third of its own nation on each measure, so nations are never compared with each other. The darkest colour is in the worst third on both.' };
   }
   const cov = coverage(ds, measure);

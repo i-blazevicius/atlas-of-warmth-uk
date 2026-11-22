@@ -67,7 +67,7 @@ export default {
     file: 'data/tiles/outlines.pmtiles',
     layers: [
       // The coastline is drawn first (below the borders) but listed first in the menu; it is the outer edge of the four nations.
-      { id: 'coast', label: 'Coastline', color: '#3a3a3a', width: [0.35, 1.1], from: 3, on: false, menuFirst: true },
+      { id: 'coast', label: 'Coastline', color: '#3a3a3a', width: [0.35, 1.1], from: 3, on: true, menuFirst: true },
       { id: 'lads', label: 'Local authorities', color: '#3a3a3a', width: [0.35, 1.1], from: 6, on: true },
       { id: 'regions', label: 'Regions (England)', color: '#222222', width: [0.6, 1.8], from: 4, on: true },
       { id: 'nations', label: 'Nations', color: '#111111', width: [1.1, 2.6], from: 3, on: true },
