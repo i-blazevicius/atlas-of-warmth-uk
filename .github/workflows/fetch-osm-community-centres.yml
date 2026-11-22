@@ -1,0 +1,46 @@
+# Downloads the OSM history of UK community centres (ohsome API) and keeps it as a
+# workflow artifact for 30 days. Runs on GitHub's servers, which can reach the API.
+# Trigger: push to this branch touching the script/workflow, or "Run workflow" in the Actions tab.
+name: Fetch OSM community centres
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "Start date"
+        default: "2015-01-01"
+      end:
+        description: "End date"
+        default: "2025-01-01"
+  push:
+    branches: [community-closures-data]
+    paths:
+      - ".github/workflows/fetch-osm-community-centres.yml"
+      - "tools/fetch_osm_community_centres.py"
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Download OSM history
+        run: |
+          python tools/fetch_osm_community_centres.py \
+            --start "${{ inputs.start || '2015-01-01' }}" \
+            --end "${{ inputs.end || '2025-01-01' }}"
+          wc -l source/osm/*.jsonl
+          ls -lh source/osm/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osm-community-centres
+          path: source/osm/*.jsonl
+          retention-days: 30
+          if-no-files-found: error
