@@ -125,9 +125,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .legend-row i { width: 22px; height: 12px; border: 1px solid var(--panel-line); flex: none; }
 /* North arrow and scale bar: the same height and the same 1px line */
 :root { --furniture-h: 20px; }
-.north { position: absolute; z-index: 2; left: 12px; bottom: 10px; width: var(--furniture-h); height: var(--furniture-h); overflow: visible; }
+.north { position: absolute; z-index: 2; left: 12px; bottom: 8.6px; width: 23px; height: 23px; overflow: visible; }
 .north circle, .north path { fill: none; stroke: var(--ink); stroke-width: 1px; vector-effect: non-scaling-stroke; }
-.north circle { fill: var(--panel-bg); }
+.north circle { fill: none; }
 
 /* Click panel: one row per measure, a coloured block holding the decile number. The exact rank is a tooltip. */
 .panel-measure { position: relative; display: flex; align-items: center; gap: 10px; padding: 3px 0; }
@@ -171,7 +171,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button:focus, .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button:focus-visible { box-shadow: none; outline: none; }
 .maplibregl-ctrl-attrib.maplibregl-compact::after { display: none; }
 .maplibregl-ctrl-attrib { font-family: var(--font-ui); font-size: 11px; color: var(--ink-dim); }
-.scalebar { background: var(--panel-bg); padding: 2px 30px 0 8px; font-family: var(--font-ui); font-size: 11px; color: var(--ink); }
+.scalebar { background: none; padding: 2px 30px 0 8px; font-family: var(--font-ui); font-size: 11px; color: var(--ink); }
 .scalebar svg { display: block; overflow: visible; }
 .scalebar text { fill: var(--ink); font: 11px var(--font-ui); text-anchor: middle; }
 .scalebar path { fill: none; stroke: var(--ink); stroke-width: 1px; }
