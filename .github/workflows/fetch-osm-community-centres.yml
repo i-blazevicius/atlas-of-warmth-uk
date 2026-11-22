@@ -1,5 +1,5 @@
-# Downloads the OSM history of UK community centres (ohsome API) and keeps it as a
-# workflow artifact for 30 days. Runs on GitHub's servers, which can reach the API.
+# Downloads UK community centres from OSM as they stood on 1 January of each year (Overpass API)
+# and keeps the result as a workflow artifact for 30 days. Runs on GitHub's servers, which can reach the API.
 # Trigger: push to this branch touching the script/workflow, or "Run workflow" in the Actions tab.
 name: Fetch OSM community centres
 
@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       start:
-        description: "Start date"
-        default: "2015-01-01"
+        description: "First year"
+        default: "2015"
       end:
-        description: "End date"
-        default: "2025-01-01"
+        description: "Last year"
+        default: "2025"
   push:
     branches: [community-closures-data]
     paths:
@@ -24,18 +24,18 @@ permissions:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install requests
-      - name: Download OSM history
+      - name: Download OSM snapshots
         run: |
           python tools/fetch_osm_community_centres.py \
-            --start "${{ inputs.start || '2015-01-01' }}" \
-            --end "${{ inputs.end || '2025-01-01' }}"
+            --start "${{ inputs.start || '2015' }}" \
+            --end "${{ inputs.end || '2025' }}"
           wc -l source/osm/*.jsonl
           ls -lh source/osm/
       - uses: actions/upload-artifact@v4

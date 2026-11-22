@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Step 1.1 (local part): turn the OSM history of community centres into
+Step 1.1 (local part): turn yearly OSM snapshots of community centres into
 stock / closures / openings per small area, for any pair of dates.
 
-Input  : the .jsonl from tools/fetch_osm_community_centres.py
+Input  : the .jsonl from tools/fetch_osm_community_centres.py (one line per feature per
+         1 January)
 Zones  : one or more boundary files, one per nation, given as PATH::CODE_FIELD::LABEL
          (England and Wales 2021 MSOAs, Scotland 2022 intermediate zones, Northern Ireland
          2011 SOAs). Each centre is placed in exactly one zone, by its coordinates.
@@ -13,7 +14,7 @@ Local authorities (optional): one UK-wide boundary file; the roll-up is made fro
 Usage (from the repo root):
     pip install geopandas pandas pyogrio
     python tools/build_community_closures.py \
-        --features source/osm/osm_community_centres_2015-01-01_2025-01-01.jsonl \
+        --features source/osm/osm_community_centres_snapshots.jsonl \
         --zones "source/boundaries/MSOA_2021_BGC.gpkg::CODE::msoa21" \
                "source/boundaries/SG_IntermediateZoneBdry_2022_EoR.shp::IZCode::iz22" \
                "source/boundaries/SOA2011.shp::SOA_CODE::soa11" \
@@ -25,10 +26,10 @@ Output (source/derived/ by default; git-ignored until reviewed):
     community_centres_lad.csv            one row per local authority and pair (if --lad)
     community_centres_zones_<pair>.gpkg  zone polygons with the metrics, for QGIS
 
-How a feature is classed at a date (a "pair" is date A -> date B, both 1 January):
-    active  : tagged amenity=community_centre / social_centre at that date
+How a feature is classed on a date (a "pair" is date A -> date B, both 1 January):
+    active  : tagged amenity=community_centre / social_centre on that date
     closed  : carries a disused:/was:/abandoned: amenity tag instead
-    absent  : no matching version at that date (deleted, or re-tagged to something else)
+    absent  : not in that date's snapshot (deleted, or re-tagged to something else)
 Counts per area:
     stock_a, stock_b   active at A / at B
     persisting         active at both
@@ -37,14 +38,14 @@ Counts per area:
     closures           the two above added together
     openings           active at B, not active at A
     closure_pct        closures / stock_a * 100, left blank where stock_a < --min-stock
-Features that disappear again after less than --min-lifespan-days are dropped from
-every count: they are almost always mapping mistakes or duplicates, not real closures.
 
 Known limits, kept in the output on purpose:
   * openings include real places that were simply mapped late, so openings and net
     change are the least reliable columns; closures as a share of stock_a is the core measure.
   * a place mapped twice (a node and a building) counts twice; de-duplication comes later.
-  * zones are different sizes and vintages in each nation (see the label column), so
+  * "removed" can be a deletion of a mistake or a duplicate as well as a real closure, which
+    is why tagged closures are kept apart.
+  * zones are different sizes and vintages in each nation (see the zone_type column), so
     compare areas within a nation, or use the local authority roll-up for the UK view.
 """
 import argparse
@@ -60,64 +61,49 @@ BNG = "EPSG:27700"
 COAST_TOLERANCE_M = 500  # centres just off a generalised coastline still get an area
 
 
-def load_features(path: Path) -> pd.DataFrame:
+def load_snapshots(path: Path) -> pd.DataFrame:
     rows = []
     with path.open(encoding="utf-8") as fh:
         for line in fh:
             if not line.strip():
                 continue
             f = json.loads(line)
-            p = f["properties"]
-            g = f.get("geometry")
-            if not g or g.get("type") != "Point":
-                continue
-            if p.get("amenity") in CENTRE:
+            tags = f.get("tags", {})
+            if tags.get("amenity") in CENTRE:
                 state = "active"
-            elif any(p.get(k) in CENTRE for k in LIFECYCLE_KEYS):
+            elif any(tags.get(k) in CENTRE for k in LIFECYCLE_KEYS):
                 state = "closed"
             else:
-                state = "other"
+                continue  # in the snapshot only because of some other tag: not ours
             rows.append(
                 {
-                    "osm_id": p["@osmId"],
-                    "valid_from": p["@validFrom"],
-                    "valid_to": p["@validTo"],
+                    "date": f["date"],
+                    "osm_id": f["osm_id"],
                     "state": state,
-                    "lon": g["coordinates"][0],
-                    "lat": g["coordinates"][1],
+                    "lon": f["lon"],
+                    "lat": f["lat"],
                 }
             )
     df = pd.DataFrame(rows)
     if df.empty:
         raise SystemExit("no features read from " + str(path))
-    df["valid_from"] = pd.to_datetime(df["valid_from"], utc=True)
-    df["valid_to"] = pd.to_datetime(df["valid_to"], utc=True)
-    return df.sort_values(["osm_id", "valid_from"]).reset_index(drop=True)
+    # a feature can appear twice on a date if it carries both an active and a lifecycle tag: active wins
+    df["rank"] = df["state"].map({"active": 0, "closed": 1})
+    df = df.sort_values(["date", "osm_id", "rank"]).drop_duplicates(["date", "osm_id"]).drop(columns="rank")
+    return df.reset_index(drop=True)
 
 
-def state_at(df: pd.DataFrame, when: pd.Timestamp, data_end: pd.Timestamp) -> pd.Series:
-    """State of every osm_id at `when`: active / closed / absent."""
-    # a version that runs to the end of the extract is still current
-    vt = df["valid_to"].where(df["valid_to"] < data_end, pd.Timestamp.max.tz_localize("UTC"))
-    hit = df[(df["valid_from"] <= when) & (when < vt)]
-    s = hit.groupby("osm_id")["state"].last().replace({"other": "absent"})
-    return s.reindex(df["osm_id"].unique()).fillna("absent")
+def state_on(df: pd.DataFrame, date: str, all_ids) -> pd.Series:
+    """State of every osm_id on a snapshot date: active / closed / absent."""
+    if date not in set(df["date"]):
+        raise SystemExit(f"no snapshot for {date}; available: {sorted(set(df['date']))}")
+    s = df[df["date"] == date].set_index("osm_id")["state"]
+    return s.reindex(all_ids).fillna("absent")
 
 
-def drop_ephemeral(df: pd.DataFrame, data_end: pd.Timestamp, min_days: int):
-    active = df[df["state"] == "active"].copy()
-    active["days"] = (active["valid_to"].clip(upper=data_end) - active["valid_from"]).dt.days
-    total = active.groupby("osm_id")["days"].sum()
-    last_to = df.groupby("osm_id")["valid_to"].max()
-    ceased = last_to < data_end
-    ephemeral = ceased & (total.reindex(last_to.index).fillna(0) < min_days)
-    drop = set(ephemeral[ephemeral].index)
-    return df[~df["osm_id"].isin(drop)], len(drop)
-
-
-def pair_metrics(df, a_date, b_date, data_end):
-    a = state_at(df, a_date, data_end)
-    b = state_at(df, b_date, data_end)
+def pair_metrics(df, all_ids, a_date, b_date):
+    a = state_on(df, a_date, all_ids)
+    b = state_on(df, b_date, all_ids)
     out = pd.DataFrame(
         {
             "stock_a": (a == "active"),
@@ -133,7 +119,7 @@ def pair_metrics(df, a_date, b_date, data_end):
 
 def parse_pair(text: str):
     ya, yb = text.split("-")
-    return pd.Timestamp(f"{ya}-01-01", tz="UTC"), pd.Timestamp(f"{yb}-01-01", tz="UTC")
+    return f"{ya}-01-01", f"{yb}-01-01"
 
 
 def read_polygons(path: str, code_field: str, label: str = None) -> gpd.GeoDataFrame:
@@ -193,20 +179,19 @@ def main():
     ap.add_argument("--lad-name", default="LAD26NM")
     ap.add_argument("--pairs", nargs="+", default=["2015-2025", "2020-2025"])
     ap.add_argument("--min-stock", type=int, default=3)
-    ap.add_argument("--min-lifespan-days", type=int, default=365)
     ap.add_argument("--out", default="source/derived")
     args = ap.parse_args()
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    df = load_features(Path(args.features))
-    data_end = df["valid_to"].max()
-    df, n_drop = drop_ephemeral(df, data_end, args.min_lifespan_days)
-    print(f"{df['osm_id'].nunique()} features kept, {n_drop} short-lived ones dropped")
+    df = load_snapshots(Path(args.features))
+    all_ids = pd.Index(df["osm_id"].unique())
+    per_date = df.groupby("date")["state"].value_counts().unstack(fill_value=0)
+    print("features per snapshot:\n" + per_date.to_string())
 
-    # one location per feature: the latest version's
-    loc = df.groupby("osm_id").last()[["lon", "lat"]]
+    # one location per feature: from the latest snapshot it appears in
+    loc = df.sort_values("date").groupby("osm_id").last()[["lon", "lat"]]
     pts = gpd.GeoDataFrame(
         loc, geometry=gpd.points_from_xy(loc["lon"], loc["lat"]), crs="EPSG:4326"
     ).to_crs(BNG)
@@ -235,7 +220,7 @@ def main():
     zone_rows, lad_rows = [], []
     for text in args.pairs:
         a_date, b_date = parse_pair(text)
-        per_point = pair_metrics(df, a_date, b_date, data_end)
+        per_point = pair_metrics(df, all_ids, a_date, b_date)
 
         z = aggregate(per_point, zone_of, zones["code"], args.min_stock)
         z = z.merge(zones[["code", "zone_type"]], on="code", how="left")
@@ -250,6 +235,10 @@ def main():
             lr = lr.merge(lad_names, on="code", how="left")
             lr.insert(1, "pair", text)
             lad_rows.append(lr)
+
+        tot = per_point.sum()
+        print(f"{text}: stock {tot.stock_a} -> {tot.stock_b}, closures {tot.closures_tagged + tot.closures_removed} "
+              f"({tot.closures_tagged} tagged, {tot.closures_removed} removed), openings {tot.openings}")
 
     pd.concat(zone_rows).rename(columns={"code": "zone_code"}).to_csv(
         out / "community_centres_zones.csv", index=False

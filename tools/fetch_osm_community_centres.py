@@ -1,109 +1,99 @@
 #!/usr/bin/env python3
 """
-Step 1.1a: extract the full OSM history of community centres for the UK.
+Step 1.1a: OSM community centres across the UK, as they stood on 1 January of each year.
 
-Pulls every version of every feature tagged as a community/social centre
-(or later re-tagged with a disused:/was:/abandoned: lifecycle prefix) between
-two dates from the ohsome API, as centroids with validity intervals.
-All stock/closure/opening logic is done locally afterwards (script 02),
-so one download answers every date pair.
+For each date, asks the Overpass API (which keeps OSM's history) for every feature tagged
+amenity=community_centre / social_centre, plus those carrying a disused:/was:/abandoned:
+amenity tag (how mappers mark a closed centre). Works out nothing: stock, closures and
+openings are computed afterwards by tools/build_community_closures.py.
+
+(The ohsome full-history API was tried first and rejects a UK-wide request as too large.)
 
 Usage:
     pip install requests
-    python tools/fetch_osm_community_centres.py --start 2015-01-01 --end 2025-01-01
+    python tools/fetch_osm_community_centres.py --start 2015 --end 2025
 
-Output: source/osm/osm_community_centres_<start>_<end>.jsonl (source/ is git-ignored)
-        one GeoJSON feature per line (centroid point + tags + @validFrom/@validTo).
+Output: source/osm/osm_community_centres_snapshots.jsonl (source/ is git-ignored)
+        one line per feature per date:
+        {"date": "2015-01-01", "osm_id": "node/123", "lat": .., "lon": .., "tags": {...}}
+        (ways and relations use Overpass's centre point)
 
-Notes
-- Data (c) OpenStreetMap contributors, ODbL. Keep attribution on the final map.
-- The UK bbox also catches the Republic of Ireland, Channel Islands and a bit of
-  France/Belgium. Those are dropped later by the spatial join to UK MSOAs.
-- If a request times out, rerun with a smaller --window-years; features that
-  straddle windows are de-duplicated on (@osmId, @validFrom).
+Data (c) OpenStreetMap contributors, ODbL. Keep that attribution on the finished map.
 """
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
 import requests
 
-API = "https://api.ohsome.org/v1/elementsFullHistory/centroid"
+ENDPOINT = "https://overpass-api.de/api/interpreter"
+H = {"User-Agent": "portrait-of-a-nation data build (github.com/i-blazevicius/portrait-of-a-nation)"}
+UK_RELATION = 62149  # the United Kingdom; area ids are the relation id + 3600000000
 
-# Rough UK bounding box: min lon, min lat, max lon, max lat.
-UK_BBOX = "-8.7,49.8,2.0,60.95"
-
-CENTRE_VALUES = "(community_centre, social_centre)"
-# Live tag plus the lifecycle tags a mapper uses when a centre closes.
-FILTER = (
-    f"amenity in {CENTRE_VALUES} or "
-    f"disused:amenity in {CENTRE_VALUES} or "
-    f"was:amenity in {CENTRE_VALUES} or "
-    f"abandoned:amenity in {CENTRE_VALUES}"
-)
+VALUES = "^(community_centre|social_centre)$"
+KEYS = ("amenity", "disused:amenity", "was:amenity", "abandoned:amenity")
 
 
-def year_windows(start: str, end: str, step: int):
-    y0, y1 = int(start[:4]), int(end[:4])
-    tail = start[4:]
-    for y in range(y0, y1, step):
-        yield f"{y}{tail}", f"{min(y + step, y1)}{end[4:]}"
+def query(date: str) -> str:
+    parts = "\n".join(f'  nwr["{k}"~"{VALUES}"](area.uk);' for k in KEYS)
+    return (
+        f'[out:json][timeout:600][date:"{date}T00:00:00Z"];\n'
+        f"area({3600000000 + UK_RELATION})->.uk;\n(\n{parts}\n);\nout center tags qt;"
+    )
 
 
-def fetch_window(t0: str, t1: str, out_fh, seen: set, retries: int = 3) -> int:
-    data = {
-        "bboxes": UK_BBOX,
-        "filter": FILTER,
-        "time": f"{t0},{t1}",
-        "properties": "tags,metadata",
-    }
+def fetch(date: str, retries: int = 6) -> list:
     for attempt in range(1, retries + 1):
         try:
-            with requests.post(API, data=data, stream=True, timeout=(30, 900)) as r:
-                if r.status_code != 200:
-                    raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
-                body = r.json()
-            break
-        except (requests.RequestException, RuntimeError, ValueError) as exc:
-            print(f"  attempt {attempt} failed: {exc}", file=sys.stderr)
-            if attempt == retries:
-                raise
-            time.sleep(10 * attempt)
-    n = 0
-    for feat in body.get("features", []):
-        p = feat["properties"]
-        key = (p.get("@osmId"), p.get("@validFrom"))
-        if key in seen:
-            continue
-        seen.add(key)
-        out_fh.write(json.dumps(feat, ensure_ascii=False) + "\n")
-        n += 1
-    return n
+            r = requests.post(ENDPOINT, data={"data": query(date)}, headers=H, timeout=(30, 900))
+            if r.status_code == 200:
+                return r.json()["elements"]
+            print(f"  {date}: HTTP {r.status_code}, attempt {attempt}: {r.text[:200]!r}", flush=True)
+        except (requests.RequestException, ValueError) as exc:
+            print(f"  {date}: {exc}, attempt {attempt}", flush=True)
+        time.sleep(30 * attempt)
+    raise SystemExit(f"giving up on {date}")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--start", default="2015-01-01")
-    ap.add_argument("--end", default="2025-01-01")
-    ap.add_argument("--window-years", type=int, default=2)
+    ap.add_argument("--start", type=int, default=2015)
+    ap.add_argument("--end", type=int, default=2025)
     ap.add_argument("--out", default="source/osm")
     args = ap.parse_args()
 
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"osm_community_centres_{args.start}_{args.end}.jsonl"
-
-    seen: set = set()
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / "osm_community_centres_snapshots.jsonl"
     total = 0
-    with out_path.open("w", encoding="utf-8") as fh:
-        for t0, t1 in year_windows(args.start, args.end, args.window_years):
-            print(f"window {t0} -> {t1} ...", flush=True)
-            n = fetch_window(t0, t1, fh, seen)
+    with path.open("w", encoding="utf-8") as fh:
+        for year in range(args.start, args.end + 1):
+            date = f"{year}-01-01"
+            elements = fetch(date)
+            n = 0
+            for e in elements:
+                c = e if e["type"] == "node" else e.get("center")
+                if not c:
+                    continue
+                fh.write(
+                    json.dumps(
+                        {
+                            "date": date,
+                            "osm_id": f'{e["type"]}/{e["id"]}',
+                            "lat": c["lat"],
+                            "lon": c["lon"],
+                            "tags": e.get("tags", {}),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+                n += 1
             total += n
-            print(f"  {n} feature versions", flush=True)
-    print(f"done: {total} rows -> {out_path}")
+            print(f"{date}: {n} features", flush=True)
+            time.sleep(10)  # be kind to the public server
+    print(f"done: {total} rows -> {path}")
 
 
 if __name__ == "__main__":
