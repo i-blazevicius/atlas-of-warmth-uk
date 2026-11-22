@@ -45,12 +45,20 @@ export class Pdf {
     this.parts = [];            // content stream, as strings
     this.images = [];           // { name, obj }
     this.gstates = new Map();   // opacity -> name
+    this.forms = [];            // transparency groups: { name, parts, bbox }
   }
   op(s) { this.parts.push(s); }
   opacity(a, stroke = false) {
     const key = `${a}${stroke ? 's' : 'f'}`;
     if (!this.gstates.has(key)) this.gstates.set(key, { name: `G${this.gstates.size}`, a, stroke });
     return this.gstates.get(key).name;
+  }
+  // A transparency group: its paths are painted opaque, overlapping harmlessly, and the group is then drawn as one (use
+  // `/${name} Do`, after setting the opacity with `gs`). Without it, pieces that overlap would show as darker seams.
+  group(parts, bbox) {
+    const name = `Fm${this.forms.length}`;
+    this.forms.push({ name, parts, bbox });
+    return name;
   }
   // Pictures: `jpeg` (bytes of a JPEG file) or `rgb` (width*height*3 bytes) with an optional `alpha` (width*height bytes).
   image({ width, height, jpeg, rgb, alpha }) {
@@ -83,6 +91,10 @@ export class Pdf {
         ? add(`<< ${common} /Filter /DCTDecode /Length ${im.jpeg.length} >>\nstream\n`, im.jpeg, '\nendstream')
         : add(...await stream(common, im.rgb));
       xobjects.push(`/${im.name} ${n} 0 R`);
+    }
+    for (const f of this.forms) {
+      const n = add(...await stream(`/Type /XObject /Subtype /Form /BBox [${f.bbox.map(num).join(' ')}] /Group << /S /Transparency /CS /DeviceRGB >> /Resources << >>`, enc.encode(f.parts.join('\n'))));
+      xobjects.push(`/${f.name} ${n} 0 R`);
     }
     const gs = [...this.gstates.values()].map((g) => `/${g.name} << /${g.stroke ? 'CA' : 'ca'} ${g.a} >>`).join(' ');
     objs[catalog - 1] = [`<< /Type /Catalog /Pages ${pages} 0 R >>`];

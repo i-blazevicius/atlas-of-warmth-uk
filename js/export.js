@@ -169,6 +169,7 @@ export function createExporter(ctx) {
       // zoom one screen at a time, where the tiles hold the full-resolution boundaries.
       const areaOps = [], lineOps = new Map(OUTLINES.map((ol) => [ol.id, []]));
       const seen = new Set(), codes = new Set();
+      const tol = o.exact ? 0.02 : 0.1;                       // simplification, in points of paper
       const proj = (coords) => coords.map(([lng, lat]) => { const [a1, b1] = px(lng, lat); return [X(a1), Y(b1)]; });
       const harvest = () => {
         if (dataset?.visible && measure) {
@@ -187,7 +188,7 @@ export function createExporter(ctx) {
                 seen.add(key);
                 const rings = [];
                 poly.forEach((ring, i) => {
-                  let pts = simplify(proj(ring), 0.1);
+                  let pts = simplify(proj(ring), tol);
                   if (pts.length < 4) return;
                   const ar = area(pts);
                   if (Math.abs(ar) < 0.002) return;
@@ -212,7 +213,7 @@ export function createExporter(ctx) {
                 const key = `${ol.id}|${part.length}|${part[0]}|${part[part.length >> 1]}|${part[part.length - 1]}`;
                 if (seen.has(key)) continue;
                 seen.add(key);
-                const pts = simplify(proj(part), 0.1);
+                const pts = simplify(proj(part), tol);
                 if (pts.length > 1) lineOps.get(ol.id).push(pathOf(pts, false));
               }
             }
@@ -220,8 +221,8 @@ export function createExporter(ctx) {
         }
       };
       if (o.exact) {
-        const mz = Math.min(10, ...AREA_SETS.map((a) => map.getSource(`areas-${a.id}`)?.maxzoom ?? 10));
-        // Zoom: enough that one screen pixel is about 0.1 mm of paper or finer; fewer than 600 screens.
+        const mz = Math.min(12, ...AREA_SETS.map((a) => map.getSource(`areas-${a.id}`)?.maxzoom ?? 10));
+        // Zoom: enough that one screen pixel is about 0.03 mm of paper or finer, up to the tiles' own top zoom; at most 2500 screens.
         const merc2 = (b) => [x0 + b[0] / S, y0 + b[1] / S, x0 + b[2] / S, y0 + b[3] / S];
         let region;
         if (o.mode === 'uk') {
@@ -233,8 +234,8 @@ export function createExporter(ctx) {
           const Se = 512 * 2 ** ze, vw = (cw / Se) * 0.9, vh = (ch / Se) * 0.9;
           return { cols: Math.max(1, Math.ceil((region[2] - region[0]) / vw)), rows: Math.max(1, Math.ceil((region[3] - region[1]) / vh)) };
         };
-        let ze = Math.min(mz, Math.max(z + 1, Math.ceil(z + Math.log2(k / 0.3))));
-        while (ze > z + 1 && (({ cols, rows }) => cols * rows)(grid(ze)) > 600) ze--;
+        let ze = Math.min(mz, Math.max(z + 1, Math.ceil(z + Math.log2(k / 0.08))));
+        while (ze > z + 1 && (({ cols, rows }) => cols * rows)(grid(ze)) > 2500) ze--;
         const { cols, rows } = grid(ze);
         const home = { center: map.getCenter(), zoom: z };
         setVis(baseIds, 'none');
@@ -265,9 +266,8 @@ export function createExporter(ctx) {
       // Areas (colour set once per group), then the outlines: a white casing and the line, for each visible level, as on
       // screen. Outline widths are the live map's pixel widths turned into points (0.75 pt a pixel) whatever the paper size.
       if (areaOps.length) {
-        pdf.op(`/${pdf.opacity(dataset.opacity ?? 0.8)} gs`);
-        for (const op of areaOps) pdf.op(op);
-        pdf.op(`/${pdf.opacity(1)} gs`);
+        const form = pdf.group(areaOps, [0, 0, W, H]);
+        pdf.op(`/${pdf.opacity(dataset.opacity ?? 0.8)} gs /${form} Do /${pdf.opacity(1)} gs`);
       }
       const lerp = (v0, v1, t) => v0 + (v1 - v0) * Math.min(1, Math.max(0, t));
       for (const ol of OUTLINES) {
@@ -287,7 +287,7 @@ export function createExporter(ctx) {
       const text = (str, x, yTop, size, { bold = false, colour = ink } = {}) =>
         pdf.op(`BT ${colour} rg /${bold ? 'F2' : 'F1'} ${num(size)} Tf ${num(x)} ${num(H - yTop - size * 0.8)} Td ${showText(str)} ET`);
       const bottom = frame.y + frame.h;
-      text(credit, W - margin - creditW, bottom + 2 * MM, cfs, { colour: faint });
+      text(credit, margin, bottom + 2 * MM, cfs, { colour: faint });
 
       if (o.legend) {
         const lg = legendModel();
