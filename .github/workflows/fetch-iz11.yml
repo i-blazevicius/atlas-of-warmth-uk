@@ -1,0 +1,31 @@
+# Downloads the Scottish intermediate zone 2011 boundaries (the zones the Scottish Community Needs Index uses),
+# to link 2011 data zones to them. Output on branch workflow-data-iz11.
+name: Fetch IZ 2011 boundaries
+on:
+  workflow_dispatch:
+  push:
+    branches: [community-closures-data]
+    paths: [".github/workflows/fetch-iz11.yml"]
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p /tmp/keep
+          curl -sSL --fail -o /tmp/keep/SG_IntermediateZoneBdry_2011.zip https://maps.gov.scot/ATOM/shapefiles/SG_IntermediateZoneBdry_2011.zip
+          ls -la /tmp/keep
+      - name: Keep on a throwaway branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan workflow-data-iz11
+          git rm -rf --cached -q . || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/keep/* .
+          git add .
+          git commit -q -m "IZ 2011 boundaries (workflow output)"
+          git push --force origin workflow-data-iz11
