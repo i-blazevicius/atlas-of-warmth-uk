@@ -116,7 +116,7 @@ The "Export PDF" group in the control panel saves the map as a vector PDF (areas
 ## Addresses
 
 An area has its own address (the map moves to it), so Back and Forward work and any area can be bookmarked or shared:
-`…/portrait-of-a-nation/#E06000001`. Area codes are ONS codes (`E`, `W`, `S` or `N` followed by 8 digits) or Northern Ireland's 2001 SOA codes (`95AA01S1`).
+`https://i-blazevicius.github.io/atlas-of-warmth-uk/#E06000001`. Area codes are ONS codes (`E`, `W`, `S` or `N` followed by 8 digits) or Northern Ireland's 2001 SOA codes (`95AA01S1`).
 
 ## When something goes wrong
 
