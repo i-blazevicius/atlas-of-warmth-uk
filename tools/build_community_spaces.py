@@ -248,6 +248,7 @@ def main():
 
     # ---------- closures per window, with verdicts ----------
     zone_rows, lad_rows, grp_rows = [], [], []
+    flow_rows_zone, flow_rows_lad = [], []
     active_latest_xy = cur[["x", "y"]].values
     for w in a.windows:
         ya, yb = (int(v) for v in w.split("-"))
@@ -260,8 +261,12 @@ def main():
         gone["b_state"] = B.state.reindex(gone.index).fillna("absent")
         gone = gone.reset_index()
         d_hall, _ = hall_tree.query(gone[["x", "y"]].values)
-        d_remap, idx = nearest(gone[["x", "y"]].values, active_latest_xy)
-        near_new = (d_remap <= REMAP_M)
+        gains = B[(B.state == "active") & ~B.index.isin(A.index)].reset_index()
+        gains = area_codes(gains, zones, lads)
+        d_remap, idx = nearest(gone[["x", "y"]].values, gains[["x", "y"]].values)
+        near_new = d_remap <= REMAP_M
+        replaced = set(gains.osm_id.values[idx[near_new]]) if len(gains) else set()
+        gains["is_replacement"] = gains.osm_id.isin(replaced)
         gb_g = np.ones(len(gone), dtype=bool)
         gone = area_codes(gone, zones, lads)
         gb_g = ~gone.zone_code.fillna("").str.startswith("N")
@@ -279,6 +284,28 @@ def main():
             out / f"community_spaces_closures_{w}.gpkg", driver="GPKG", layer=f"closures_{w}")
         v = gone.verdict.value_counts()
         print(f"{w}: stock {len(A)} | gone {len(gone)} -> " + ", ".join(f"{k} {n}" for k, n in v.items()))
+
+        # flows by area and type (counts only; percentages are worked out by the map)
+        Bstock = area_codes(B[B.state == "active"].reset_index(), zones, lads)
+        Astock0 = area_codes(A.reset_index(), zones, lads)
+        for level_key, level_name in (("zone_code", "zone"), ("lad_code", "lad")):
+            if level_key == "lad_code" and lads is None:
+                continue
+            parts = {
+                "stock_a": Astock0, "stock_b": Bstock, "gains_raw": gains,
+                "gains": gains[~gains.is_replacement], "losses_raw": gone,
+                "losses": gone[gone.verdict.isin(["closed_tagged", "probable_closure"])],
+            }
+            frames = []
+            for col, d in parts.items():
+                f = d.dropna(subset=[level_key]).groupby([level_key, "space_type"]).size().rename(col)
+                frames.append(f)
+            fl = pd.concat(frames, axis=1).fillna(0).astype(int).reset_index()
+            fl = fl.rename(columns={level_key: "area_code"})
+            fl.insert(1, "window", w)
+            fl.insert(1, "level", level_name)
+            fl["space_group"] = fl.space_type.map(GROUP)
+            (flow_rows_zone if level_name == "zone" else flow_rows_lad).append(fl)
 
         # area tables
         Astock = A.reset_index().copy()
@@ -314,6 +341,8 @@ def main():
         pd.concat(zone_rows).to_csv(out / "community_spaces_zones.csv", index=False)
     if lad_rows:
         pd.concat(lad_rows).to_csv(out / "community_spaces_lad.csv", index=False)
+    if flow_rows_zone or flow_rows_lad:
+        pd.concat(flow_rows_zone + flow_rows_lad).to_csv(out / "community_spaces_flows.csv", index=False)
     if grp_rows:
         pd.concat(grp_rows).to_csv(out / "community_spaces_zone_counts_by_group.csv", index=False)
     print("written to", out, "and", outp)
