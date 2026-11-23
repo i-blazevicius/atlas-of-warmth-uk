@@ -28,22 +28,35 @@ for term in ["ethnic", "religion", "country of birth", "main language", "languag
     except Exception as e:  # noqa
         print("  parse fail", e, txt[:200])
 
-for ds in ["NM_608_1", "NM_2041_1", "NM_529_1", "NM_2049_1", "NM_2024_1", "NM_2043_1", "NM_1296_1", "NM_2020_1"]:
+def nm(x):
+    return x["value"] if isinstance(x, dict) else x
+
+
+DS = ["NM_522_1", "NM_529_1", "NM_524_1", "NM_525_1", "NM_2041_1", "NM_2049_1", "NM_2024_1", "NM_2043_1", "NM_2032_1"]
+for ds in DS:
     code, txt = get(B + ds + ".def.sdmx.json")
     print(f"\n== {ds}: HTTP {code}")
-    if code == 200:
-        j = json.loads(txt)
-        kf = j["structure"]["keyfamilies"]["keyfamily"][0]
-        print(" name:", kf["name"]["value"] if isinstance(kf["name"], dict) else kf["name"])
-        dims = kf["components"]["dimension"]
-        print(" dims:", [d["conceptRef"] for d in dims])
-    code, txt = get(B + ds + "/geography.def.sdmx.json")
-    if code == 200:
+    if code != 200:
+        continue
+    kf = json.loads(txt)["structure"]["keyfamilies"]["keyfamily"][0]
+    print(" name:", nm(kf["name"]))
+    dims = kf["components"]["dimension"]
+    print(" dims:", [(d.get("conceptRef") or d.get("concept") or d.get("id") or list(d.keys())) for d in dims])
+    for d in dims:
+        cid = d.get("conceptRef") or d.get("concept") or d.get("id")
+        if not cid or str(cid).lower() in ("geography", "time", "freq", "measures", "rural_urban"):
+            continue
+        c2, t2 = get(B + ds + "/" + str(cid) + ".def.sdmx.json")
+        if c2 != 200:
+            continue
         try:
-            cl = json.loads(txt)["structure"]["codelists"]["codelist"][0]["code"]
-            print(" geography types:", [(c["value"], (c["description"]["value"] if isinstance(c["description"], dict) else c["description"])[:40]) for c in cl][:40])
+            cl = json.loads(t2)["structure"]["codelists"]["codelist"][0]["code"]
+            print("  dim", cid, [(c["value"], nm(c["description"])[:45]) for c in cl][:40])
         except Exception as e:  # noqa
-            print(" geo parse fail", e, txt[:200])
+            print("  dim", cid, "parse fail", e)
+    for g in ("TYPE299", "TYPE151", "TYPE298"):
+        c3, t3 = get(B + ds + ".data.csv", params={"geography": g, "measures": 20100, "recordlimit": 4})
+        print("  data", g, c3, t3[:300].replace("\n", " / "))
 
 for u in ["https://www.scotlandscensus.gov.uk/census-results/download-data/",
           "https://www.scotlandscensus.gov.uk/webapi/jsf/tableView/tableView.xhtml",
