@@ -1,0 +1,38 @@
+# Looks up postcodes (lat/lon, MSOA/LSOA 2021, local authority) with the postcodes.io bulk API.
+# Input: postcodes.txt on branch workflow-input-postcodes (public register postcodes, one per line).
+# Output: postcodes_geocoded.csv.gz on branch workflow-data-postcodes.
+name: Geocode charity postcodes
+on:
+  workflow_dispatch:
+  push:
+    branches: [community-closures-data]
+    paths: [".github/workflows/geocode-postcodes.yml", "tools/geocode_postcodes.py"]
+permissions:
+  contents: write
+jobs:
+  geocode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow-input-postcodes
+          path: input
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python tools/geocode_postcodes.py --in input/postcodes.txt --out /tmp/postcodes_geocoded.csv
+      - name: Keep result on a throwaway branch
+        run: |
+          mkdir -p /tmp/keep && gzip -9 -c /tmp/postcodes_geocoded.csv > /tmp/keep/postcodes_geocoded.csv.gz
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan workflow-data-postcodes
+          git rm -rf --cached -q . || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/keep/* .
+          git add ./*.gz
+          git commit -q -m "Geocoded charity postcodes"
+          git push --force origin workflow-data-postcodes
