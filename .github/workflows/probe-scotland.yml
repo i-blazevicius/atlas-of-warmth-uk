@@ -3,34 +3,11 @@ on:
   workflow_dispatch:
   push:
     branches: [community-closures-data]
-    paths: [".github/workflows/probe-scotland.yml"]
+    paths: [".github/workflows/probe-scotland.yml", "tools/probe_scotland.py"]
 jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Nomis geography types for UK Business Counts (names mentioning Scotland zones / councils)
-        run: |
-          curl -s -m 60 "https://www.nomisweb.co.uk/api/v01/dataset/NM_141_1/geography.def.sdmx.json" -o /tmp/g.json || true
-          ls -l /tmp/g.json; python3 - <<'P'
-          import json,re
-          try:
-              d=json.load(open('/tmp/g.json'))
-          except Exception as e:
-              print('no json', e); raise SystemExit
-          s=json.dumps(d)
-          for m in sorted(set(re.findall(r'"(?:value|description|name)"\s*:\s*"([^"]*(?:ntermediate|ata zone|ouncil area|2011)[^"]*)"', s)))[:60]: print(m)
-          P
-      - name: Nomis types by direct test (IZ and council areas)
-        run: |
-          for t in TYPE317 TYPE318 TYPE299 TYPE298 TYPE295 TYPE296 TYPE424 TYPE423 TYPE432 TYPE446 TYPE447; do
-            echo "== $t: $(curl -s -m 30 "https://www.nomisweb.co.uk/api/v01/dataset/NM_141_1/geography/$t.def.sdmx.json" | python3 -c 'import sys,json
-try:
-  d=json.load(sys.stdin); k=d["structure"]["codelists"]["codelist"][0]; print(k.get("name",{}).get("value"), len(k.get("code",[])))
-except Exception as e: print("n/a")')"
-          done
-      - name: Scottish IZ 2001 boundary reachability
-        run: |
-          for u in "https://maps.gov.scot/ATOM/shapefiles/SG_IntermediateZone_Bdry_2001.zip" "https://www.nrscotland.gov.uk/media/xspeoohq/pop-estimates-2001-iz-lookup.xlsx" "https://data.gov.uk/dataset/intermediate-zone-boundaries-2001" "https://statistics.gov.scot/resource?uri=http%3A%2F%2Fstatistics.gov.scot%2Fdef%2Fgeography%2Fintermediate-zone-2001"; do
-            echo "$u -> $(curl -sIL -m 30 -o /dev/null -w '%{http_code} %{size_download}' "$u")"
-          done
+      - uses: actions/checkout@v4
+      - run: python3 tools/probe_scotland.py
