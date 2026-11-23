@@ -11,7 +11,7 @@ Geography (area_level):
   lsoa21  England and Wales; 2011 output areas are converted to 2021 LSOAs with the ONS exact-fit lookup
           (output areas split between LSOAs are apportioned equally across their pieces: method_a = apportioned)
   dz11    Scotland data zones 2011, both dates (2011 and 2022 census)
-  sdz21   Northern Ireland super data zones 2021; 2011 census SOAs converted by 2021 data-zone population
+  soa11   Northern Ireland SOAs (2011 census native); 2021 data zones / super data zones moved onto them by population
 
 Usage: python tools/build_census_dataset.py --oa-lookup <OA11->OA21 csv> --lsoa-lookup <OA21->LSOA21 csv> \
          --ni-dir <folder with the four 2011 NI xlsx>  --sc2022-dir <folder with the Scottish 2022 tables> [--out source/census_data]
@@ -389,13 +389,13 @@ def ni2021(ni21_dir, dz_shp):
     def read(key):
         return pd.read_csv(glob.glob(f"{ni21_dir}/*{key}*.csv")[0], dtype=str)
 
-    def tidy(d, mapper, to_super=True):
+    def tidy(d, mapper, to_super=None):
         d = d.copy()
         d.columns = ["code", "label", "cat_code", "cat", "count"]
         d["det"] = d.cat.map(mapper)
         d = d.dropna(subset=["det"])
         d["value"] = pd.to_numeric(d["count"], errors="coerce")
-        if to_super:
+        if to_super == "sdz":
             d["code"] = d.code.map(to_sdz)
         return d.groupby(["code", "det"], as_index=False).value.sum().rename(columns={"code": "area_code"})
 
@@ -421,7 +421,7 @@ def ni2021(ni21_dir, dz_shp):
     for c in cats:
         if c.startswith("Christian: ") and c not in rel:
             rel[c] = "other_christian_ni"
-    res["religion"] = tidy(d, rel, to_super=False)
+    res["religion"] = tidy(d, rel)
     return res, dz_pop
 
 
@@ -445,8 +445,31 @@ def soa11_to_sdz21(df11, soa_shp, dz_shp, dz_pop):
     return g
 
 
+def ni21_weights(soa_shp, dz_shp, dz_pop):
+    """Population weights for moving NI 2021 data zones and super data zones onto 2011 SOAs (the map's NI areas)."""
+    soa = gpd.read_file(soa_shp)[["SOA_CODE", "geometry"]].to_crs(27700)
+    dz = gpd.read_file(dz_shp)[["DZ2021_cd", "SDZ2021_cd", "geometry"]].to_crs(27700)
+    dz["dz_area"] = dz.area
+    dz["pop"] = dz.DZ2021_cd.map(dz_pop).fillna(0)
+    ov = gpd.overlay(dz, soa, how="intersection", keep_geom_type=True)
+    ov["piece"] = ov.area
+    ov = ov[ov.piece > 1]
+    ov["pp"] = ov["pop"] * ov.piece / ov.dz_area + 1e-9 * ov.piece
+    w_dz = ov.groupby(["DZ2021_cd", "SOA_CODE"], as_index=False).pp.sum()
+    w_dz["w"] = w_dz.pp / w_dz.groupby("DZ2021_cd").pp.transform("sum")
+    w_sdz = ov.groupby(["SDZ2021_cd", "SOA_CODE"], as_index=False).pp.sum()
+    w_sdz["w"] = w_sdz.pp / w_sdz.groupby("SDZ2021_cd").pp.transform("sum")
+    return w_dz.rename(columns={"DZ2021_cd": "src"}), w_sdz.rename(columns={"SDZ2021_cd": "src"})
+
+
+def to_soa(df, w):
+    x = df.merge(w[["src", "SOA_CODE", "w"]], left_on="area_code", right_on="src")
+    x["value"] = x.value * x.w
+    return x.groupby(["SOA_CODE", "det"], as_index=False).value.sum().rename(columns={"SOA_CODE": "area_code"})
+
+
 # ---------------------------------------------------------------- assemble ---------------------------------------
-YEARS = {"lsoa21": (2011, 2021), "dz11": (2011, 2022), "sdz21": (2011, 2021)}
+YEARS = {"lsoa21": (2011, 2021), "dz11": (2011, 2022), "soa11": (2011, 2021)}
 QUALITY = {"ethnic": "high", "religion": "high", "birth": "medium", "language": "medium"}
 
 
@@ -513,9 +536,62 @@ def main():
         frames.append(assemble("dz11", topic, d11, d22))
         print("Scotland", topic, "ok")
     ni21, dz_pop = ni2021(a.ni21_dir, a.dz21)
+    w_dz, w_sdz = ni21_weights(a.soa11, a.dz21, dz_pop)
+    soa_conv = {}
     for topic, d11 in ni2011(a.ni_dir).items():
-        conv = soa11_to_sdz21(d11, a.soa11, a.dz21, dz_pop)
-        frames.append(assemble("sdz21", topic, conv, ni21[topic], {}))
+        d21 = to_soa(ni21[topic], w_sdz if topic == "religion" else w_dz)
+        frames.append(assemble("soa11", topic, d11, d21))
+        print("NI", topic, "ok")
+
+    x = pd.concat(frames, ignore_index=True)
+    # totals = sum of the broad groups (they partition the people counted)
+    tot = x[x.grain == "broad"].groupby("area_code")[["count_a", "count_b"]].sum(min_count=1).rename(
+        columns={"count_a": "total_a", "count_b": "total_b"})
+    x = x.merge(tot, on="area_code", how="left")
+    x["area_level"] = level
+    x["topic"] = topic
+    x["year_a"], x["year_b"] = YEARS[level]
+    if method_a is not None:
+        x["method_a"] = x.area_code.map(method_a).fillna("apportioned")
+    else:
+        x["method_a"] = "published"
+    x["quality"] = QUALITY[topic]
+    return x
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--ew-dir", default="source/census/ew")
+    ap.add_argument("--sc11-dir", default="source/census/sc11")
+    ap.add_argument("--sc22-dir", required=True)
+    ap.add_argument("--ni-dir", required=True, help="folder with the four 2011 NI xlsx")
+    ap.add_argument("--ni21-dir", required=True, help="folder with the four NI 2021 csv tables")
+    ap.add_argument("--soa11", required=True, help="NI SOA 2011 shapefile")
+    ap.add_argument("--dz21", required=True, help="NI 2021 data zone shapefile")
+    ap.add_argument("--oa-lookup", required=True)
+    ap.add_argument("--lsoa-lookup", required=True)
+    ap.add_argument("--out", default="source/census_data")
+    a = ap.parse_args()
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    frames = []
+
+    ew = ew_tables(a.ew_dir)
+    for topic, (d11, d21) in ew.items():
+        if d11 is None or d21 is None:
+            print("skipping England and Wales", topic, "(table missing)")
+            continue
+        conv, meth = oa_to_lsoa(d11, a.oa_lookup, a.lsoa_lookup)
+        frames.append(assemble("lsoa21", topic, conv, d21, meth))
+        print("E&W", topic, "ok")
+    for topic, (d11, d22) in scotland(a.sc11_dir, a.sc22_dir).items():
+        frames.append(assemble("dz11", topic, d11, d22))
+        print("Scotland", topic, "ok")
+    ni21, dz_pop = ni2021(a.ni21_dir, a.dz21)
+    w_dz, w_sdz = ni21_weights(a.soa11, a.dz21, dz_pop)
+    for topic, d11 in ni2011(a.ni_dir).items():
+        d21 = to_soa(ni21[topic], w_sdz if topic == "religion" else w_dz)
+        frames.append(assemble("soa11", topic, d11, d21))
         print("NI", topic, "ok")
 
     x = pd.concat(frames, ignore_index=True)
@@ -530,7 +606,7 @@ def main():
             "how_to_combine": "Pick a topic, a grain (broad or detail, never both) and the groups to include; sum count_a and count_b "
                               "for the ticked groups; share = count / total; net = count_b - count_a; share change in percentage points.",
             "levels": {"lsoa21": "England and Wales 2021 LSOAs (2011 converted)", "dz11": "Scotland data zones 2011",
-                       "sdz21": "Northern Ireland super data zones 2021 (2011 SOAs converted)"},
+                       "soa11": "Northern Ireland super output areas (the map's NI areas); 2021 data zones moved onto them by population, religion from 2021 super data zones"},
             "years": {k: list(v) for k, v in YEARS.items()},
             "topics": {t: {"broad": b, "detail": {k: v[1] for k, v in dd.items()}} for t, (b, dd) in TOPICS.items()},
             "notes": {
