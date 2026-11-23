@@ -192,10 +192,82 @@ export default {
           classes: { breaks: [2.5, 3, 3.5, 4, 4.5], colours: ['#006837', '#2f9b55', '#6fbb78', '#9fd284', '#c5e38f', '#f2f6c0'], unit: ' t' } },
       ],
     },
+    // Community Spaces and Communities are worked out from what the visitor ticks (js/community.js), so they have no `measures` here.
+    // Community Spaces: change in the number of community spaces per council (tools/build_community_data.py).
+    // A source is one layer of data/community-spaces.csv. Sources are kept apart because they overlap (one hall can be in the
+    // OpenStreetMap layer and in the charity registers), so their counts are never added together. `windows` limits the
+    // from → to pairs offered (leave it out to offer every window in the file): new layers, such as Ordnance Survey points of
+    // interest for earlier years, are added by giving them a layer id in the data file and a source here.
+    {
+      id: 'spaces', type: 'spaces', label: 'Community Spaces',
+      file: 'data/community-spaces.csv', councils: 'data/councils.csv', meta: 'data/community-spaces.json',
+      minStart: 3,                          // a percentage needs at least this many at the start
+      opacity: 0.8,
+      sourceLine: 'Community spaces counted per council; each source is a different record of the same kind of place, so they are not added together.',
+      sources: [
+        { id: 'cs', label: 'OpenStreetMap', windows: ['2022-2025'],
+          note: 'Places mapped by volunteers on OpenStreetMap and checked against Ordnance Survey. Only 2022 to 2025 is shown: over longer periods the count mostly reflects growing map coverage.' },
+        { id: 'char', label: 'Charity registers',
+          note: 'Charities picked by name from the registers (a candidate list, not a census). England and Wales: new registrations only, since removed charities have no postcode. Scotland: new and removed. Northern Ireland: new only, and recent rises partly reflect the regulator catching up with existing bodies.' },
+        { id: 'biz', label: 'Business counts',
+          note: 'Local units from UK Business Counts (Nomis), by council and rounded to 5 at source, so small changes are noise. Net change only.' },
+        { id: 'cs_council', label: 'Council-run (London)',
+          note: 'Council-run spaces from a Freedom of Information request to London councils (January 2024). Definitions differ by borough and some boroughs did not reply.' },
+      ],
+    },
+    // Communities: census 2011 and 2021 (Scotland 2022) by small area, broad groups only. Broad and detailed groups count the
+    // same people, so the detailed groups are never added to them.
+    {
+      id: 'communities', type: 'communities', label: 'Communities',
+      dir: 'data/communities/',
+      minStart: 10,                         // a % change needs at least this many people at the start
+      opacity: 0.8,
+      sourceLine: 'Census 2011 and 2021 (England, Wales and Northern Ireland) and 2022 (Scotland): ONS, NRS and NISRA. 2011 counts are converted to the 2021 areas, and split equally between areas where an old area straddled them.',
+      topics: [
+        { id: 'ethnic', label: 'Ethnic group' },
+        { id: 'religion', label: 'Religion' },
+        { id: 'birth', label: 'Country of birth' },
+        { id: 'language', label: 'Main language' },
+      ],
+      topicNotes: {
+        ethnic: { S: 'Scotland’s census used its own list of groups, fitted here into the broad groups (“Black” includes African and Caribbean).', N: 'Northern Ireland’s 2021 groups are coarse; 2011 was collapsed to match.' },
+        religion: { N: 'Muslim and Hindu are counted within “other religion” in Northern Ireland in both years. “Religion not stated” fell partly because the 2021 question was answered more often, so read shifts between “no religion” and “not stated” with care.' },
+        birth: { N: 'Northern Ireland’s 2011 “other” birthplace group includes non-EU Europe, which 2021 reports separately: read changes in “Europe outside the UK” and “Outside Europe” with care.' },
+        language: { S: '2011 asked about the language used at home and 2022 about the main language, so the change is only indicative.' },
+      },
+    },
+    {
+      id: 'cni', label: 'Community Needs Index',
+      file: 'data/cni.csv',                          // tools/build_community_data.py
+      key: 'code', name: 'name', nation: 'nation',
+      parent: { code: 'la_code', name: 'la_name' },
+      opacity: 0.8,
+      // Ranked in each nation, as the index is: "rank 120 of 33,755".
+      totals: { E: 33755, W: 410, S: 1279, N: 890 },
+      decileLabels: ['highest need 10%', 'lowest need 10%'],
+      rankNote: '1 = highest need',
+      extras: ['inherited', 'cni area', 'left behind'],
+      inheritNote: 'The index is published for a larger area, {area}: this area takes that area’s values.',
+      flag: { column: 'left behind', text: 'Flagged as a “left behind” area in the index’s source tables (indicative: the flag is not part of the score).' },
+      note: 'Deciles are calculated separately for each nation (1 = the 10% of that nation’s areas with the highest need), so nations are not comparable. The index combines civic assets (places and facilities), connectedness (isolation, transport, broadband) and an active and engaged community (volunteering, participation). Higher need means fewer assets, less connection and less engagement.',
+      sources: {
+        E: 'Community Needs Index 2023 (OCSI for Local Trust), LSOA 2021; published as open data by the UK Data Service. Tables from the open-source IMD R package (humaniverse).',
+        W: 'Community Needs Index 2022 (OCSI), published for MSOAs (2011): each LSOA takes its MSOA’s values.',
+        S: 'Community Needs Index 2022 (OCSI), published for intermediate zones (2011): each data zone takes its intermediate zone’s values.',
+        N: 'Community Needs Index 2022 (OCSI), SOA 2011.',
+      },
+      licence: 'Published as open data; the licence terms of each nation’s release should be checked before reuse.',
+      measures: [
+        { id: 'cni', label: 'Community needs (overall)', names: { E: 'Community Needs Index', W: 'Community Needs Index', S: 'Community Needs Index', N: 'Community Needs Index' } },
+        { id: 'civic', label: 'Civic assets', rank: null, names: { E: 'Civic assets', W: 'Civic assets', S: 'Civic assets', N: 'Civic assets' } },
+        { id: 'connected', label: 'Connectedness', rank: null, names: { E: 'Connectedness', W: 'Connectedness', S: 'Connectedness', N: 'Connectedness' } },
+        { id: 'engaged', label: 'Active and engaged community', rank: null, names: { E: 'Active and engaged community', W: 'Active and engaged community', S: 'Active and engaged community', N: 'Active and engaged community' } },
+      ],
+    },
   ],
 
   // Credits for the boundaries, shown with the base map's in the map's attribution (bottom right).
-  attribution: 'Boundaries: Office for National Statistics, Scottish Government, NISRA; Open Government Licence v3.0. Fuel poverty: DESNZ, Scottish Government; energy performance: MHCLG, Scottish Government, NISRA; Open Government Licence v3.0. Contains OS data © Crown copyright and database right 2026.',
+  attribution: 'Boundaries: Office for National Statistics, Scottish Government, NISRA; Open Government Licence v3.0. Fuel poverty: DESNZ, Scottish Government; energy performance: MHCLG, Scottish Government, NISRA; Open Government Licence v3.0. Community spaces: © OpenStreetMap contributors (ODbL); Charity Commission for England and Wales, OSCR and CCNI registers; UK Business Counts (ONS, via Nomis). Census: ONS, NRS, NISRA. Community Needs Index: OCSI. Contains OS data © Crown copyright and database right 2026.',
 
   // Starting view: the whole UK. [longitude, latitude], zoom.
   view: {

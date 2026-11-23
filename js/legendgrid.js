@@ -14,8 +14,8 @@ export function gridLayout(grid, W, cell, fs, measure) {
   items.push({ type: 'tri', pts: [[ax, 0], [ax - ah * 0.6, ah * 1.3], [ax + ah * 0.6, ah * 1.3]] });
   items.push({ type: 'line', x1: gx, y1: ay, x2: gx + 3 * cell - ah, y2: ay });
   items.push({ type: 'tri', pts: [[gx + 3 * cell, ay], [gx + 3 * cell - ah * 1.3, ay - ah * 0.6], [gx + 3 * cell - ah * 1.3, ay + ah * 0.6]] });
-  items.push({ type: 'text', x: ax - g, y: ay + small * 0.35, text: 'best on both', size: small, anchor: 'end', rot: 0 });
-  items.push({ type: 'text', x: gx + 3 * cell + g, y: small * 0.95, text: 'worst on both', size: small, anchor: 'start', rot: 0 });
+  items.push({ type: 'text', x: ax - g, y: ay + small * 0.35, text: grid.low ?? 'best on both', size: small, anchor: 'end', rot: 0 });
+  items.push({ type: 'text', x: gx + 3 * cell + g, y: small * 0.95, text: grid.high ?? 'worst on both', size: small, anchor: 'start', rot: 0 });
   // The vertical measure's name: ordinary horizontal text, right-aligned against the arrow, centred on the grid's height.
   const wrap = (text, size, maxW) => {
     const lines = [];

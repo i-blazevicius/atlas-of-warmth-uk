@@ -1,0 +1,214 @@
+{
+ "categories": [
+  {
+   "id": "biz.libraries",
+   "layer": "biz",
+   "label": "Libraries",
+   "group": "biz"
+  },
+  {
+   "id": "biz.other_membership_organisations",
+   "layer": "biz",
+   "label": "Other membership organisations",
+   "group": "biz"
+  },
+  {
+   "id": "biz.pubs",
+   "layer": "biz",
+   "label": "Pubs",
+   "group": "biz"
+  },
+  {
+   "id": "biz.religious_organisations",
+   "layer": "biz",
+   "label": "Religious organisations",
+   "group": "biz"
+  },
+  {
+   "id": "biz.sport_clubs",
+   "layer": "biz",
+   "label": "Sports clubs",
+   "group": "biz"
+  },
+  {
+   "id": "char.club",
+   "layer": "char",
+   "label": "Clubs (social, working men's)",
+   "group": "club"
+  },
+  {
+   "id": "char.community_centre",
+   "layer": "char",
+   "label": "Community centres",
+   "group": "hall"
+  },
+  {
+   "id": "char.memorial_hall",
+   "layer": "char",
+   "label": "Memorial halls",
+   "group": "hall"
+  },
+  {
+   "id": "char.other_hall",
+   "layer": "char",
+   "label": "Other halls",
+   "group": "hall"
+  },
+  {
+   "id": "char.religious_hall",
+   "layer": "char",
+   "label": "Church / parish halls",
+   "group": "religious_hall"
+  },
+  {
+   "id": "char.scout_guide",
+   "layer": "char",
+   "label": "Scout and guide halls",
+   "group": "youth_scout"
+  },
+  {
+   "id": "char.village_hall",
+   "layer": "char",
+   "label": "Village halls",
+   "group": "hall"
+  },
+  {
+   "id": "char.youth",
+   "layer": "char",
+   "label": "Youth centres and clubs",
+   "group": "youth_scout"
+  },
+  {
+   "id": "cs.club",
+   "layer": "cs",
+   "label": "Clubs (social, working men's)",
+   "group": "club"
+  },
+  {
+   "id": "cs.community_centre",
+   "layer": "cs",
+   "label": "Community centres",
+   "group": "hall"
+  },
+  {
+   "id": "cs.community_hall",
+   "layer": "cs",
+   "label": "Community halls",
+   "group": "hall"
+  },
+  {
+   "id": "cs.cultural",
+   "layer": "cs",
+   "label": "Cultural centres",
+   "group": "other_community"
+  },
+  {
+   "id": "cs.events_venue",
+   "layer": "cs",
+   "label": "Events venues",
+   "group": "other_community"
+  },
+  {
+   "id": "cs.family_centre",
+   "layer": "cs",
+   "label": "Family centres",
+   "group": "other_community"
+  },
+  {
+   "id": "cs.memorial_hall",
+   "layer": "cs",
+   "label": "Memorial halls",
+   "group": "hall"
+  },
+  {
+   "id": "cs.other_hall",
+   "layer": "cs",
+   "label": "Other halls",
+   "group": "hall"
+  },
+  {
+   "id": "cs.religious_hall",
+   "layer": "cs",
+   "label": "Church / parish halls",
+   "group": "religious_hall"
+  },
+  {
+   "id": "cs.scout_guide",
+   "layer": "cs",
+   "label": "Scout and guide halls",
+   "group": "youth_scout"
+  },
+  {
+   "id": "cs.senior",
+   "layer": "cs",
+   "label": "Senior centres",
+   "group": "other_community"
+  },
+  {
+   "id": "cs.social_centre",
+   "layer": "cs",
+   "label": "Social centres",
+   "group": "social_centre"
+  },
+  {
+   "id": "cs.unclassified",
+   "layer": "cs",
+   "label": "Unclassified",
+   "group": "unclassified"
+  },
+  {
+   "id": "cs.village_hall",
+   "layer": "cs",
+   "label": "Village halls",
+   "group": "hall"
+  },
+  {
+   "id": "cs.youth",
+   "layer": "cs",
+   "label": "Youth centres and clubs",
+   "group": "youth_scout"
+  },
+  {
+   "id": "cs_council.council_run",
+   "layer": "cs_council",
+   "label": "Council Run",
+   "group": "cs_council"
+  }
+ ],
+ "layers": [
+  {
+   "id": "cs",
+   "label": "Community spaces (OpenStreetMap, checked against OS)",
+   "flows": "gains_and_losses"
+  },
+  {
+   "id": "biz",
+   "label": "Pubs and community organisations (Nomis business counts)",
+   "flows": "net_only"
+  },
+  {
+   "id": "char",
+   "label": "Charities running halls and centres (Charity Commission E&W, OSCR Scotland, CCNI Northern Ireland)",
+   "flows": "gains_only_england_wales_gains_and_losses_scotland"
+  },
+  {
+   "id": "cs_council",
+   "label": "Council-run community spaces (London FOI, partial)",
+   "flows": "gains_and_losses"
+  }
+ ],
+ "rules": {
+  "min_stock_a_for_percent": 3,
+  "recommended_window": "2022-2025 for layer cs",
+  "area_levels": [
+   "lad26"
+  ]
+ },
+ "notes": {
+  "cs": "OpenStreetMap volunteer mapping: use 2022-2025; longer windows are inflated by growing coverage. gains/losses exclude re-mapped duplicates and losses where an OS hall is still present.",
+  "biz": "UK Business Counts local units (pubs, religious organisations, other membership organisations, libraries, sports clubs), rounded to 5 at source; whole UK incl. Scotland and NI, council level. Net change only. Small-area business counts are deliberately not included (too few units per area).",
+  "char": "Charities picked by name (candidate list, not a census). England and Wales: gains and stock only, because removed charities carry no postcode in the register (national removals by window: 2022-2025 677, 2020-2025 1064, 2018-2025 1611, 2015-2025 2285). Scotland (OSCR): active and removed registers both carry postcodes and removal dates, so gains, losses and net are real; removals before 2013 are mostly a one-off register clean-up. Northern Ireland (CCNI): placed by town from the address (no postcodes); removed charities have no date, so gains only and stock is of charities still registered; the 2019-2023 'gains' are largely charities registered when the regulator caught up with existing bodies, not new spaces (quality low). Charities sharing one umbrella address (e.g. Girlguiding units) are left out. England and Wales removals by window are in national_removals.csv, split into probable closures and successions (assets passed on, so the hall may continue); they cannot be placed by council.",
+  "cs_council": "London FOI to councils (Jan 2024): council-run spaces only; definitions differ by borough; some boroughs did not reply.",
+  "scale": "Community-space, business and charity data are published at council level only: median council has about 21 OSM spaces and about 170 business units, while an LSOA typically has 0-1. Census data stays on LSOAs/data zones/SOAs in census_data.zip."
+ }
+}

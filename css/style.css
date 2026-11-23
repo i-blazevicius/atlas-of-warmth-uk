@@ -231,3 +231,32 @@ input[type="range"]::-moz-range-thumb { width: 5px; height: 18px; background: va
 .bigrid polygon { fill: var(--ink-dim); }
 .bigrid text { fill: var(--ink-dim); font-family: inherit; }
 .bi-row select optgroup { font-style: normal; font-weight: 700; }
+
+
+/* Community Spaces and Communities: controls that rewrite the map, and the tables in the click panel */
+.dyn-body { gap: 6px; }
+.dyn-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 4px; }
+.dyn-tabs button { font: inherit; font-size: 12px; padding: 2px 7px; border: 1px solid var(--panel-line); border-radius: 0; background: var(--panel-bg); color: var(--ink); cursor: pointer; }
+.dyn-tabs button[aria-selected="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.dyn-tabs button:disabled { cursor: default; }
+.dyn-row { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
+.dyn-row span { flex: none; min-width: 3em; color: var(--ink-dim); }
+.dyn-row select { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 2px; border: 1px solid var(--panel-line); border-radius: 0; background: var(--panel-bg); color: var(--ink); }
+.dyn-line { display: flex; gap: 10px; }
+.dyn-line .dyn-row:first-child { flex: 1.3; }
+.dyn-line .dyn-row:last-child span { min-width: 0; }
+.dyn-types { margin: 2px 0 0; max-height: 220px; overflow: auto; border-top: 1px solid var(--panel-line); padding-top: 3px; }
+.dyn-all label { font-weight: 600; }
+.dyn-topics { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
+.dyn-drop { border: 1px solid var(--panel-line); padding: 3px 6px; }
+.dyn-drop > summary { cursor: pointer; font-size: 12px; }
+.dyn-note { margin: 4px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.4; }
+.dyn-note:empty { display: none; }
+.panel-sub { margin: 8px 0 2px; font-weight: 600; }
+table.split { width: 100%; border-collapse: collapse; font-size: 12px; margin: 2px 0 4px; }
+table.split th, table.split td { padding: 2px 3px; border-bottom: 1px solid var(--panel-line); text-align: right; font-variant-numeric: tabular-nums; }
+table.split th:first-child { text-align: left; font-weight: 400; }
+table.split thead th { color: var(--ink-faint); font-weight: 400; }
+table.split tr.total th, table.split tr.total td { font-weight: 700; }
+table.split tr.chosen th { font-weight: 700; }
+.panel-measure .block.wider { width: 68px; font-size: 13px; }

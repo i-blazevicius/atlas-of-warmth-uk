@@ -7,6 +7,7 @@ const Styles = await import(`./styles.js${q}`);
 
 const { scaleModel, thinLabels } = await import(`./scalebar.js${q}`);
 const { gridLayout } = await import(`./legendgrid.js${q}`);
+const Community = await import(`./community.js${q}`);
 const core = createCore(CONFIG);
 const { state, esc, fail, problem, resolveColumns, loadCSV } = core;
 state.hashCode = '';
@@ -188,6 +189,7 @@ async function loadDataset(cfg) {
     wanted[`r:${m.id}`] = m.rank === null ? null : m.rank ?? `${m.id} rank`;         // rank: null = this measure has no rank column
     for (const c of m.counts ?? []) wanted[`c:${c}`] = c;
   }
+  for (const c of cfg.extras ?? []) wanted[`x:${c}`] = c;          // further columns the click panel reads
   const col = resolveColumns(headers, Object.fromEntries(Object.entries(wanted).filter(([, v]) => v)));
   if (!col.key) throw fail('E4', `${cfg.label}: no "${cfg.key}" column, so the rows cannot be matched to areas. Check the header row of ${cfg.file}, or key in js/config.js.`);
   for (const [k, v] of Object.entries(wanted)) if (v && !col[k]) problem(`${cfg.label}: column "${v}" not found (was it renamed?)`);
@@ -250,16 +252,22 @@ function computeThirds(ds) {
 function applyData(ds) {
   const t0 = performance.now();
   computeThirds(ds);
+  ds.unmapped = {};
   for (const [code, r] of ds.byCode) {
     const a = areaSetOf(code);
     if (!a) { const n = String(r[ds.col.nation] ?? '?'); ds.unmapped[n] = (ds.unmapped[n] ?? 0) + 1; continue; }
     const st = {};
     for (const m of ds.measures) {
       const v = Number(r[ds.col[`v:${m.id}`]]);
-      if (r[ds.col[`v:${m.id}`]] === '' || !Number.isFinite(v)) continue;
+      if (r[ds.col[`v:${m.id}`]] === '' || !Number.isFinite(v)) {
+        // A dataset that is rewritten on every change must clear what an earlier selection left behind.
+        if (ds.dynamic) { st[stateKey(ds, m)] = null; st[`${stateKey(ds, m)}:third`] = null; st[`${stateKey(ds, m)}:class`] = null; }
+        continue;
+      }
       st[stateKey(ds, m)] = v;
       const th = ds.third.get(m.id)?.get(code);
       if (th !== undefined) st[`${stateKey(ds, m)}:third`] = th;
+      else if (ds.dynamic) st[`${stateKey(ds, m)}:third`] = null;
       if (m.kind === 'rate') st[`${stateKey(ds, m)}:class`] = classIndex(classesOf(ds, m), String(r[ds.col.nation] ?? '').trim(), v);
     }
     map.setFeatureState({ source: `areas-${a.id}`, sourceLayer: a.layer, id: code }, st);
@@ -443,6 +451,7 @@ function setActive(ds, measure) {
   for (const input of document.querySelectorAll('input[data-measure]')) input.checked = input.dataset.ds === ds.id && input.value === measure.id;
   syncModes();
   syncHash();
+  ds.onActivate?.();                      // datasets worked out from the visitor's ticks (js/community.js) compute here
 }
 // Choosing a mode unfolds its group and folds the other modes (folding by hand still works afterwards).
 function openOnly(group) {
@@ -456,8 +465,20 @@ function syncModes() {
     g.classList.toggle('off', !on);
     g.querySelector('input[data-moderadio]').checked = on;
     for (const el of g.querySelectorAll('.measures input, .measures select, .measures button, input[type="range"]')) el.disabled = !on;
+    if (on) state.datasets.find((d) => d.id === g.dataset.mode)?.syncControls?.();      // some controls stay off for their own reasons
   }
 }
+
+// A dataset worked out from the visitor's ticks (js/community.js) has new numbers: write them to the map and redraw whatever shows them.
+function refreshDynamic(ds) {
+  applyData(ds);
+  pairCache.clear();
+  state.bi?.refresh?.();
+  if (state.bi && state.active?.dataset === state.bi.ds && (state.bi.a.ds === ds || state.bi.b.ds === ds)) { showBi(); return; }
+  if (state.active?.dataset === ds) { state.focus = null; paintMap(); renderLegend(); if (state.selected) openArea(state.selected); }
+}
+const NATION_OF = (code) => (code[0] === '9' ? 'N' : code[0]);
+const community = { esc, fmt, loadCSV, problem, state, NATIONS, NO_DATA, textOn, refresh: refreshDynamic };
 
 // ── Compare two measures ───────────────────────────────────
 // A virtual dataset whose single measure colours each area by its third on two real measures: `a` across (the
@@ -511,6 +532,8 @@ function hideBi() {
   setActive(p.dataset, p.measure);
 }
 const thirdWords = ['best third', 'middle third', 'worst third'];
+// A measure that is not good or bad (a share, a change) has thirds from lowest to highest.
+const thirdWord = (x, t) => (x.m.neutral ? ['lowest third', 'middle third', 'highest third'][t] : thirdWords[t]);
 
 
 // ── Control panel ──────────────────────────────────────────
@@ -584,9 +607,9 @@ function buildDatasetControls() {
     on.addEventListener('change', () => { if (on.checked) { setActive(ds, ds.lastMeasure ?? ds.measures.find((x) => !x.compareOnly)); openOnly(group); } });
     sum.append(on, Object.assign(document.createElement('span'), { className: 'dataset-label', textContent: ds.label }),
       slider(ds.opacity, (v) => { ds.opacity = v; paintMap(); }, `${ds.label} opacity`));
-    const list = Object.assign(document.createElement('div'), { className: 'measures' });
-    list.setAttribute('role', 'radiogroup');
-    for (const m of ds.measures.filter((x) => !x.compareOnly)) {
+    const list = ds.controls ?? Object.assign(document.createElement('div'), { className: 'measures' });
+    if (!ds.controls) list.setAttribute('role', 'radiogroup');
+    for (const m of ds.dynamic ? [] : ds.measures.filter((x) => !x.compareOnly)) {
       const label = document.createElement('label');
       const input = Object.assign(document.createElement('input'), { type: 'radio', name: 'measure', value: m.id });
       input.dataset.ds = ds.id; input.dataset.measure = '1';
@@ -639,6 +662,7 @@ function buildBiControls() {
   const byId = (id) => opts.find((x) => measureId(x) === id);
   // A choice is greyed out (and cannot be picked) when it is the other axis's measure or shares no area with it.
   const refresh = () => {
+    for (const sel of Object.values(selects)) for (const o of sel.options) { const x = byId(o.value); if (x) o.textContent = x.m.label; }   // labels of selection-driven measures change
     selects.x.value = measureId(state.bi.a); selects.y.value = measureId(state.bi.b);
     for (const [axis, other] of [['x', state.bi.b], ['y', state.bi.a]]) {
       for (const o of selects[axis].options) { const x = byId(o.value); o.disabled = !(axis === 'x' ? biAvailable(x, other) : biAvailable(other, x)); }
@@ -667,16 +691,18 @@ function legendModel() {
   const { dataset: ds, measure } = state.active ?? {};
   if (!ds || !ds.visible) return null;
   if (measure.kind === 'bivariate') {
-    const { a, b } = measure, ns = Object.keys(NATIONS).filter((n) => measure.nations.has(n));
+    const { a, b } = measure, ns = Object.keys(NATIONS).filter((n) => measure.nations.has(n)), neutral = !!(a.m.neutral || b.m.neutral);
     const dim = (k, c) => (inFocus(k) ? c : fadeColour(c));
     const colours = [2, 1, 0].map((ty) => [0, 1, 2].map((tx) => dim(3 * tx + ty, biColour(tx, ty))));       // rows from the top (worst vertical) down
     return { title: ['Two measures compared', ns.length < Object.keys(NATIONS).length ? `${ns.map((n) => NATIONS[n]).join(', ')} only` : ''].filter(Boolean),
       head: '', rows: [{ colour: inFocus(undefined) ? NO_DATA : fadeColour(NO_DATA), label: 'No data', key: 'none' }], focusText: focusText(),
-      grid: { colours, x: fullLabel(a), y: fullLabel(b) },
-      note: 'Each area is placed in the best, middle or worst third of its own nation on each measure, so nations are never compared with each other. The darkest colour is in the worst third on both.' };
+      grid: { colours, x: fullLabel(a), y: fullLabel(b), ...(neutral ? { low: 'best or lowest on both', high: 'worst or highest on both' } : {}) },
+      note: neutral
+        ? 'Each area is placed in the lowest, middle or highest third of its own nation on each measure, so nations are never compared with each other. Shares and changes are not good or bad: their top third is the highest. The darkest colour is in the worst third (or, for a share or change, the highest) on both.'
+        : 'Each area is placed in the best, middle or worst third of its own nation on each measure, so nations are never compared with each other. The darkest colour is in the worst third on both.' };
   }
   const cov = coverage(ds, measure);
-  const title = [measure.label, `${ds.label}${cov ? ` · ${cov} only` : ''}`];
+  const title = measure.legendTitle ?? [measure.label, `${ds.label}${cov ? ` · ${cov} only` : ''}`];
   let head = '', rows;
   if (measure.kind === 'rate') {
     const cl = classesOf(ds, measure), unit = measure.unit ?? cl.unit ?? '';
@@ -689,13 +715,14 @@ function legendModel() {
     }
     const edge = (br, i) => (i === 0 ? `< ${br[0]}${unit}` : i === br.length ? `> ${br[i - 1]}${unit}` : `${br[i - 1]}–${br[i]}${unit}`);
     if (cols.length > 1) head = cols.map((c) => c.label).join(' · ');
-    rows = cl.colours.map((c, i) => ({ colour: inFocus(i) ? c : fadeColour(c), label: cols.map((k) => edge(k.br, i)).join(' · '), key: i }));
+    rows = cl.empty ? [] : cl.colours.map((c, i) => ({ colour: inFocus(i) ? c : fadeColour(c), label: cl.labels?.[i] ?? cols.map((k) => edge(k.br, i)).join(' · '), key: i }));
   } else {
-    const label = (i) => (i === 1 ? '1 · most deprived 10%' : i === 10 ? '10 · least deprived 10%' : String(i));
+    const ends = ds.decileLabels ?? ['most deprived 10%', 'least deprived 10%'];
+    const label = (i) => (i === 1 ? `1 · ${ends[0]}` : i === 10 ? `10 · ${ends[1]}` : String(i));
     rows = RAMP.map((c, i) => ({ colour: inFocus(i + 1) ? c : fadeColour(c), label: label(i + 1), key: i + 1 }));
   }
-  rows.push({ colour: inFocus(undefined) ? NO_DATA : fadeColour(NO_DATA), label: 'No data', key: 'none' });
-  return { title, head, rows, note: ds.note ?? '', focusText: focusText() };
+  rows.push({ colour: inFocus(undefined) ? NO_DATA : fadeColour(NO_DATA), label: measure.noDataLabel ?? 'No data', key: 'none' });
+  return { title, head, rows, note: measure.note ?? ds.note ?? '', focusText: focusText() };
 }
 // The comparison legend as an SVG (shapes from js/legendgrid.js, in pixels).
 const measureTextPx = (() => {
@@ -738,28 +765,36 @@ function renderLegend() {
 function openArea(code) {
   state.selected = code;
   for (const a of AREA_SETS) map.setFilter(`selected-${a.id}`, ['==', ['get', a.code], code]);
-  const entries = state.rows.get(code) ?? [];
+  // A dataset worked out from the visitor's ticks (Community Spaces, Communities) is listed only while it is on the map.
+  const entries = (state.rows.get(code) ?? []).filter((e) => !e.dataset.dynamic || e.dataset.visible);
   const bm = state.active?.measure?.kind === 'bivariate' ? state.active.measure : null;
   let biHtml = '';
   if (bm) {
     const ta = bm.a.ds.third.get(bm.a.m.id)?.get(code), tb = bm.b.ds.third.get(bm.b.m.id)?.get(code), has = ta !== undefined && tb !== undefined;
     biHtml = `<p class="control-label">Comparison</p><div class="panel-measure current"><span class="block" style="background:${esc(has ? biColour(ta, tb) : NO_DATA)}"></span>` +
-      `<span class="name">${has ? `${esc(fullLabel(bm.a))}: ${thirdWords[ta]}<br>${esc(fullLabel(bm.b))}: ${thirdWords[tb]}` : 'Not both measures have a value for this area'}</span></div>`;
+      `<span class="name">${has ? `${esc(fullLabel(bm.a))}: ${thirdWord(bm.a, ta)}<br>${esc(fullLabel(bm.b))}: ${thirdWord(bm.b, tb)}` : 'Not both measures have a value for this area'}</span></div>`;
   }
   let html = `<p class="area-code">${esc(code)}</p>`;
   if (!entries.length) {
     html += `<p class="area-name">${esc(code)}</p><p class="hint">No dataset has values for this area.</p>${biHtml}`;
   }
-  entries.forEach(({ dataset: ds, row }, i) => {
-    const g = (k) => (ds.col[k] ? String(row[ds.col[k]] ?? '').trim() : '');
+  // The name, parent and household count come from the first ordinary dataset (those worked out from ticks carry no names).
+  const head = entries.find((e) => !e.dataset.dynamic) ?? entries[0];
+  if (head) {
+    const g = (k) => (head.dataset.col[k] ? String(head.row[head.dataset.col[k]] ?? '').trim() : '');
     const nation = g('nation');
-    if (i === 0) {
-      html += `<p class="area-name">${esc(g('name') || code)}</p>`;
-      html += `<p class="panel-parent">${esc([g('pname'), NATIONS[nation]].filter(Boolean).join(', '))}</p>`;
-      const hh = state.hh.get(code);
-      if (hh) html += `<p class="panel-households" title="${esc(hh.basis)}">${nation === 'N' ? 'about ' : ''}${fmt(hh.n)} households</p>`;
-      html += biHtml;
-    }
+    html += `<p class="area-name">${esc(g('name') || code)}</p>`;
+    html += `<p class="panel-parent">${esc([g('pname'), NATIONS[nation]].filter(Boolean).join(', '))}</p>`;
+    const hh = state.hh.get(code);
+    if (hh) html += `<p class="panel-households" title="${esc(hh.basis)}">${nation === 'N' ? 'about ' : ''}${fmt(hh.n)} households</p>`;
+    html += biHtml;
+  }
+  // The dataset on the map is listed first.
+  const live = state.active?.dataset;
+  [...entries].sort((x, y) => (y.dataset === live) - (x.dataset === live)).forEach(({ dataset: ds, row }) => {
+    const g = (k) => (ds.col[k] ? String(row[ds.col[k]] ?? '').trim() : '');
+    const nation = g('nation') || NATION_OF(code);
+    if (ds.dynamic) { html += ds.panelHtml(code); return; }
     const mark = html.length;
     let added = 0;
     html += `<p class="control-label">${esc(ds.label)}</p>`;
@@ -774,7 +809,7 @@ function openArea(code) {
       const colour = !has ? NO_DATA : rate ? classColour(classesOf(ds, m), nation, v) : RAMP[v - 1];
       const total = ds.totals?.[nation];
       let tip = g(`r:${m.id}`) !== '' && Number.isFinite(rk)
-        ? `Rank ${fmt(rk)}${total ? ` of ${fmt(total)} in ${NATIONS[nation] ?? nation}` : ''} (1 = most deprived)` : '';
+        ? `Rank ${fmt(rk)}${total ? ` of ${fmt(total)} in ${NATIONS[nation] ?? nation}` : ''} (${ds.rankNote ?? '1 = most deprived'})` : '';
       if (rate && has) {
         const [a, b] = (m.counts ?? []).map((c) => Number(g(`c:${c}`)));
         const u = m.unit ?? classesOf(ds, m).unit ?? '', dp = u === '%' ? 1 : m.decimals ?? 0;
@@ -800,10 +835,15 @@ function openArea(code) {
     if (Number.isFinite(prRank)) {
       html += `<p class="panel-note">${esc(g('pname'))} ranks ${fmt(prRank)} of ${fmt(ds.parentRanks.total)} ${esc(ds.parentRanks.label)} on ${esc(m0.names?.[nation] ?? m0.label)} (rank of average rank; 1 = most deprived).</p>`;
     }
+    if (ds.inheritNote && g('x:inherited') === '1') {
+      html += `<p class="panel-note">${esc(ds.inheritNote.replace('{area}', g('x:cni area')))}</p>`;
+    }
+    if (ds.flag && g(`x:${ds.flag.column}`) === '1') html += `<p class="panel-note">${esc(ds.flag.text)}</p>`;
     html += `<p class="panel-note">${esc(ds.sources?.[nation] ?? '')} ${esc(ds.licence ?? '')}</p>`;
   });
   $('panel-body').innerHTML = html;
   $('panel').hidden = false;
+  for (const box of $('panel-body').querySelectorAll('.dyn-panel')) state.datasets.find((d) => d.id === box.dataset.dyn)?.afterPanel?.(code, box);
   for (const head of $('panel-body').querySelectorAll('.panel-measure.open')) fillIndicators(head);   // domains left open stay open
 }
 
@@ -985,7 +1025,9 @@ async function start() {
     } catch (e) { problem(`Household counts could not be read (${e.message}); they will not be shown.`); }
   }
   for (const cfg of CONFIG.datasets) {
-    const ds = await loadDataset(cfg);
+    const ds = cfg.type === 'spaces' ? await Community.createSpaces(cfg, community)
+      : cfg.type === 'communities' ? await Community.createCommunities(cfg, community) : await loadDataset(cfg);
+    if (!ds) continue;                         // a dataset that failed to load has said so in the problems list
     state.datasets.push(ds);
     applyData(ds);
   }
@@ -1008,6 +1050,10 @@ async function start() {
   showProblems();
   if (location.hash) route();
   state.ready = true;
+  // The census files are read only when needed, but the default view of Communities is prepared in the background so
+  // that it is ready in the comparison dropdowns.
+  const idle = window.requestIdleCallback ?? ((f) => setTimeout(f, 1500));
+  idle(() => { for (const d of state.datasets) d.preload?.(); }, { timeout: 4000 });
 }
 start().catch(window.mapFail);
 

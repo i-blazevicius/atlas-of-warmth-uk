@@ -14,12 +14,13 @@ export { num };
 
 // Text goes out as WinAnsi bytes. Latin-1 passes straight through; a few typographic marks have their own codes;
 // anything else is replaced (a subscript 2 becomes a plain 2).
-const WIN = { '–': 0x96, '—': 0x97, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '€': 0x80, '…': 0x85, '₂': 0x32, '≥': 0x3e, '≤': 0x3c };
+const WIN = { '–': 0x96, '—': 0x97, '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '€': 0x80, '…': 0x85, '₂': 0x32, '≥': 0x3e, '≤': 0x3c, '−': 0x96, '→': [0x74, 0x6f] };
 export function winAnsi(text) {
   const out = [];
   for (const ch of String(text)) {
     const c = ch.codePointAt(0);
-    out.push(WIN[ch] ?? (c < 256 ? c : 0x3f));
+    const w = WIN[ch] ?? (c < 256 ? c : 0x3f);
+    if (Array.isArray(w)) out.push(...w); else out.push(w);
   }
   return out;
 }

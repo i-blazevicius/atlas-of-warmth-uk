@@ -1,0 +1,163 @@
+{
+ "years": {
+  "lsoa21": [
+   2011,
+   2021
+  ],
+  "dz11": [
+   2011,
+   2022
+  ],
+  "sdz21": [
+   2011,
+   2021
+  ]
+ },
+ "notes": {
+  "ethnic": "Shared broad groups. England/Wales 2011 and 2021 use the same question; Scotland uses its own list (African and Caribbean/Black are merged into Black); Northern Ireland 2011 has no White sub-groups.",
+  "religion": "Northern Ireland groups all Christian denominations as Christian (details kept). Pagan is separate in Scotland 2022 only.",
+  "birth": "2021 categories differ from 2011 (EU groups, British Overseas). Broad groups (UK, Europe outside UK, outside Europe) are comparable; Northern Ireland 2011 'Other' also contains non-EU Europe.",
+  "language": "England and Wales: main language English (or Welsh in Wales) vs another language, from the proficiency tables. Scotland 2022 is main language; Scotland 2011 asked about language used at home, so the change is only indicative (quality low).",
+  "method_a": "'apportioned' = 2011 output areas that straddle 2021 LSOAs were split equally between the pieces.",
+  "northern_ireland": "2021 groups are coarse (5 ethnic groups, 9 birth groups, English vs other language); 2011 was collapsed to match. Religion: Muslim and Hindu are counted within other religions in both years for comparability. Country of birth: 2011 'Other' includes non-EU Europe, which 2021 reports separately. Irish Travellers are counted as White in 2011. Religion not stated fell from 2011 to 2021 (122k to 31k) partly because the 2021 question was answered more often, so read NI religion shifts between 'no religion' and 'not stated' with care.",
+  "language_scotland_quality": "low"
+ },
+ "topics": {
+  "ethnic": {
+   "categories": [
+    {
+     "id": "white",
+     "label": "White"
+    },
+    {
+     "id": "mixed",
+     "label": "Mixed or multiple"
+    },
+    {
+     "id": "asian",
+     "label": "Asian"
+    },
+    {
+     "id": "black",
+     "label": "Black, African or Caribbean"
+    },
+    {
+     "id": "other",
+     "label": "Other ethnic group"
+    }
+   ],
+   "quality": {
+    "dz11": [
+     "high"
+    ],
+    "lsoa21": [
+     "high"
+    ],
+    "sdz21": [
+     "high"
+    ]
+   }
+  },
+  "religion": {
+   "categories": [
+    {
+     "id": "christian",
+     "label": "Christian"
+    },
+    {
+     "id": "buddhist",
+     "label": "Buddhist"
+    },
+    {
+     "id": "hindu",
+     "label": "Hindu"
+    },
+    {
+     "id": "jewish",
+     "label": "Jewish"
+    },
+    {
+     "id": "muslim",
+     "label": "Muslim"
+    },
+    {
+     "id": "sikh",
+     "label": "Sikh"
+    },
+    {
+     "id": "other_religion",
+     "label": "Other religion"
+    },
+    {
+     "id": "no_religion",
+     "label": "No religion"
+    },
+    {
+     "id": "not_stated",
+     "label": "Religion not stated"
+    }
+   ],
+   "quality": {
+    "dz11": [
+     "high"
+    ],
+    "lsoa21": [
+     "high"
+    ],
+    "sdz21": [
+     "high"
+    ]
+   }
+  },
+  "birth": {
+   "categories": [
+    {
+     "id": "uk",
+     "label": "United Kingdom"
+    },
+    {
+     "id": "europe_ex_uk",
+     "label": "Europe outside the UK"
+    },
+    {
+     "id": "outside_europe",
+     "label": "Outside Europe"
+    }
+   ],
+   "quality": {
+    "dz11": [
+     "medium"
+    ],
+    "lsoa21": [
+     "medium"
+    ],
+    "sdz21": [
+     "medium"
+    ]
+   }
+  },
+  "language": {
+   "categories": [
+    {
+     "id": "english_main",
+     "label": "English (or Welsh in Wales) is main language"
+    },
+    {
+     "id": "other_main",
+     "label": "Another main language"
+    }
+   ],
+   "quality": {
+    "dz11": [
+     "medium"
+    ],
+    "lsoa21": [
+     "medium"
+    ],
+    "sdz21": [
+     "medium"
+    ]
+   }
+  }
+ }
+}
