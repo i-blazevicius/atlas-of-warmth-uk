@@ -1,0 +1,27 @@
+name: Fetch map boundaries
+on:
+  workflow_dispatch:
+  push:
+    branches: [community-closures-data]
+    paths: [".github/workflows/fetch-boundaries.yml", "tools/fetch_boundaries.py"]
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install requests
+      - run: python3 tools/fetch_boundaries.py --out /tmp/keep && ls -la /tmp/keep
+      - name: Keep on a throwaway branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan workflow-data-boundaries
+          git rm -rf --cached -q . || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/keep/* .
+          git add .
+          git commit -q -m "Map boundaries (workflow output)"
+          git push --force origin workflow-data-boundaries
