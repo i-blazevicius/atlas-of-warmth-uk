@@ -20,14 +20,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {id: eth11, dataset: NM_522_1, geography: TYPE299}
-          - {id: rel11, dataset: NM_529_1, geography: TYPE299}
-          - {id: cob11, dataset: NM_524_1, geography: TYPE299}
-          - {id: lang11, dataset: NM_525_1, geography: TYPE299}
-          - {id: eth21, dataset: NM_2041_1, geography: TYPE151}
-          - {id: rel21, dataset: NM_2049_1, geography: TYPE151}
-          - {id: cob21, dataset: NM_2024_1, geography: TYPE151}
-          - {id: lang21msoa, dataset: NM_2043_1, geography: TYPE152}
+          - {id: prof11, dataset: NM_526_1, geography: TYPE299}
+          - {id: prof21, dataset: NM_2048_1, geography: TYPE151}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
