@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Probe: Scotland census 2022 and 2011 data-zone bulk file pages."""
-import re
+"""Probe: Nomis 2021 language-related tables available at small areas."""
+import json
 import requests
 
 H = {"User-Agent": "Mozilla/5.0 (portrait-of-a-nation data build)"}
-for u in ["https://www.scotlandscensus.gov.uk/census-results/download-data/census-table-data/",
-          "https://www.scotlandscensus.gov.uk/documents/2011-census-table-data-sns-data-zone-2011/",
-          "https://www.scotlandscensus.gov.uk/census-results/download-data/commissioned-tables/"]:
-    r = requests.get(u, headers=H, timeout=60)
-    print("\nURL", u, r.status_code, len(r.text))
-    for l in sorted(set(re.findall(r'href="([^"]+)"', r.text))):
-        if re.search(r"2022|\.zip|\.csv|\.xlsx|data-zone|datazone", l, re.I):
-            print("  ", l[:220])
-    print("  text 2022 mentions:", len(re.findall("2022", r.text)))
+B = "https://www.nomisweb.co.uk/api/v01/dataset/"
+for term in ["proficiency", "household language", "language"]:
+    j = requests.get(B + "def.sdmx.json", params={"search": f"*{term}*"}, headers=H, timeout=90).json()
+    for d in j["structure"]["keyfamilies"]["keyfamily"]:
+        n = d["name"]["value"] if isinstance(d["name"], dict) else d["name"]
+        if n.startswith(("TS", "RM", "QS", "KS")) and ("2" in n[:4]):
+            print(term, "|", d["id"], "|", n[:100])
+for ds in ["NM_2044_1", "NM_2048_1", "NM_2047_1"]:
+    for g in ("TYPE151", "TYPE152"):
+        r = requests.get(B + ds + ".data.csv", params={"geography": g, "measures": 20100, "recordlimit": 3}, headers=H, timeout=90)
+        print(ds, g, r.status_code, r.text[:150].replace("\n", " / "))
+    r = requests.get(B + ds + ".def.sdmx.json", headers=H, timeout=60)
+    if r.status_code == 200:
+        print("   ", r.json()["structure"]["keyfamilies"]["keyfamily"][0]["name"])
