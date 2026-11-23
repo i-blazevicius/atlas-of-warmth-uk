@@ -27,7 +27,7 @@ from pathlib import Path
 import requests
 
 BASE = "https://www.nomisweb.co.uk/api/v01/dataset/NM_141_1.data.csv"
-H = {"User-Agent": "Mozilla/5.0 (portrait-of-a-nation data build)"}
+H = {"User-Agent": "Mozilla/5.0 (atlas-of-warmth-uk data build)"}
 
 # Nomis's own ids for the SIC 2007 5-digit lines (looked up from its industry list).
 INDUSTRIES = {

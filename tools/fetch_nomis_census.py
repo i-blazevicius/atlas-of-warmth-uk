@@ -15,7 +15,7 @@ import time
 
 import requests
 
-H = {"User-Agent": "Mozilla/5.0 (portrait-of-a-nation data build)"}
+H = {"User-Agent": "Mozilla/5.0 (atlas-of-warmth-uk data build)"}
 B = "https://www.nomisweb.co.uk/api/v01/dataset/"
 SKIP = {"geography", "time", "freq", "measures", "rural_urban", "date"}
 
