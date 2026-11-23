@@ -4,7 +4,8 @@ Step 1.2a: UK Business Counts (Nomis dataset NM_141_1, local units) for the cate
 that stand for community life: pubs, religious organisations, other membership
 organisations, libraries and sports clubs. One tidy row per area, year and industry.
 
-Small-area counts are on 2011 MSOAs up to 2024 and on 2021 MSOAs from 2025 (figures are rounded to 5). Scottish intermediate zones are
+TYPE424 is the 361 local authorities of May 2026 (England, Wales, Scotland, Northern Ireland), the same list as the
+map's outlines. Small-area counts are on 2011 MSOAs up to 2024 and on 2021 MSOAs from 2025 (figures are rounded to 5). Scottish intermediate zones are
 fetched too. There is no small-area Northern Ireland data in this dataset.
 
 Usage (from the repo root):
@@ -36,7 +37,7 @@ INDUSTRIES = {
     "libraries": ("91011", "134308739"),
     "sport_clubs": ("93120", "134310848"),
 }
-AREA_TYPES = {"TYPE152": "msoa21", "TYPE297": "msoa11", "TYPE317": "iz_scotland"}
+AREA_TYPES = {"TYPE424": "lad26", "TYPE152": "msoa21", "TYPE297": "msoa11", "TYPE317": "iz_scotland"}
 # Nomis holds small-area industry counts for 2021 MSOAs only from 2025; earlier years are on 2011 MSOAs.
 YEAR_RANGE = {"msoa21": (2025, 9999), "msoa11": (0, 2024)}
 
