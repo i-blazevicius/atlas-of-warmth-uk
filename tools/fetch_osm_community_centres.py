@@ -61,7 +61,7 @@ def main():
                 filt = tmp / "filtered.osm.pbf"
                 gj = tmp / "filtered.geojsonseq"
                 run(["osmium", "tags-filter", "--overwrite", "-o", str(filt), str(src), *FILTERS])
-                run(["osmium", "export", "--overwrite", "--add-unique-id=type_id", "-f", "geojsonseq", "-o", str(gj), str(filt)])
+                run(["osmium", "export", "--overwrite", "--add-unique-id=type_id", "--geometry-types=point,polygon", "-f", "geojsonseq", "-o", str(gj), str(filt)])
                 src.unlink()
                 with gj.open(encoding="utf-8") as g:
                     for line in g:

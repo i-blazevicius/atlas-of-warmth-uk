@@ -61,6 +61,15 @@ BNG = "EPSG:27700"
 COAST_TOLERANCE_M = 500  # centres just off a generalised coastline still get an area
 
 
+def drop_ring_duplicates(df: pd.DataFrame) -> pd.DataFrame:
+    """osmium exports a closed way as both an outline (w<id>) and an area (a<2*id>): keep the area only."""
+    area_keys = set(zip(df["date"], df["osm_id"]))
+    is_way = df["osm_id"].str.startswith("w")
+    twin = [(d, "a" + str(2 * int(i[1:]))) in area_keys if w else False
+            for d, i, w in zip(df["date"], df["osm_id"], is_way)]
+    return df[~pd.Series(twin, index=df.index)].reset_index(drop=True)
+
+
 def load_snapshots(path: Path) -> pd.DataFrame:
     rows = []
     with path.open(encoding="utf-8") as fh:
@@ -90,7 +99,7 @@ def load_snapshots(path: Path) -> pd.DataFrame:
     # a feature can appear twice on a date if it carries both an active and a lifecycle tag: active wins
     df["rank"] = df["state"].map({"active": 0, "closed": 1})
     df = df.sort_values(["date", "osm_id", "rank"]).drop_duplicates(["date", "osm_id"]).drop(columns="rank")
-    return df.reset_index(drop=True)
+    return drop_ring_duplicates(df.reset_index(drop=True))
 
 
 def state_on(df: pd.DataFrame, date: str, all_ids) -> pd.Series:
