@@ -98,11 +98,23 @@ def layer_biz(nomis_path, zones11, lads):
     t["category"] = "biz." + t.industry
     t["quality"] = "medium"  # counts are rounded to the nearest 5 at this level
     zone = t.assign(area_level="msoa11")
-    t = t.merge(lad_of.rename_axis("area_code").reset_index(), on="area_code", how="left")
-    lad = (t.dropna(subset=["lad_code"]).groupby(["lad_code", "window", "layer", "category", "source", "quality"])
-           [["stock_a", "stock_b"]].sum().reset_index().rename(columns={"lad_code": "area_code"}))
+    # council level comes straight from Nomis (all UK, incl. Scotland and NI)
+    nl = pd.read_csv(nomis_path, dtype={"area_code": str})
+    nl = nl[(nl.area_type == "lad26") & (nl.status == "A")].copy()
+    nl["count"] = pd.to_numeric(nl["count"], errors="coerce")
+    pl = nl.pivot_table(index=["area_code", "industry"], columns="year", values="count", aggfunc="sum")
+    lrows = []
+    for a, b in ((2015, 2025), (2016, 2024), (2019, 2024), (2021, 2024), (2022, 2025)):
+        if a not in pl.columns or b not in pl.columns:
+            continue
+        u = pl[[a, b]].dropna().reset_index().rename(columns={a: "stock_a", b: "stock_b"})
+        u["window"] = f"{a}-{b}"
+        lrows.append(u)
+    lad = pd.concat(lrows)
+    lad["layer"], lad["source"] = "biz", "nomis_uk_business_counts"
+    lad["category"] = "biz." + lad.industry
+    lad["quality"] = "high"  # rounded to 5, but a council holds many units
     lad["area_level"] = "lad26"
-    lad["quality"] = "high"  # rounding errors largely cancel when summed
     out = []
     for d in (zone, lad):
         for c in ("gains", "losses", "gains_raw", "losses_raw"):
@@ -280,7 +292,7 @@ def main():
         "notes": {
             "cs": "OpenStreetMap volunteer mapping: use 2022-2025; longer windows are inflated by growing coverage. "
                   "gains/losses exclude re-mapped duplicates and losses where an OS hall is still present.",
-            "biz": "UK Business Counts local units, rounded to 5; England and Wales only; 2016-2024 on 2011 MSOAs.",
+            "biz": "UK Business Counts local units, rounded to 5. Councils: whole UK incl. Scotland and NI (2015-2025 and shorter windows). Small areas: England and Wales only (2011 MSOAs, 2016-2024); small-area Scotland pending a 2001 intermediate zone boundary or lookup.",
             "char": "Charities placed by postcode; removed charities carry no postcode, so only gains and stock are "
                     "located. National removals by window: " + json.dumps(national_losses),
             "cs_council": "London FOI to councils (Jan 2024): council-run spaces only; definitions differ by borough; "
