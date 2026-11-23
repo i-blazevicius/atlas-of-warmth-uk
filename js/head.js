@@ -21,7 +21,7 @@
   html.classList.add('styling');
   setTimeout(function () { html.classList.remove('styling'); }, 4000); // never stay hidden
   try {
-    var c = JSON.parse(localStorage.getItem('portrait-of-a-nation-style-cache'));
+    var c = JSON.parse(localStorage.getItem('atlas-of-warmth-uk-style-cache') || localStorage.getItem('portrait-of-a-nation-style-cache'));
     if (c) {
       for (var k in c.vars) html.style.setProperty(k, c.vars[k]);
       (c.fonts || []).forEach(function (f) {

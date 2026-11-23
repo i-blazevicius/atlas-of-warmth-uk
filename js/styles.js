@@ -2,8 +2,8 @@
 // There are two: QGIS (the default, plain cartographic) and Sad Earth (dark). The visitor's choice is
 // remembered in this browser. Each look has page settings ("css": CSS variables) and map colours ("map").
 
-const CHOICE_KEY = 'portrait-of-a-nation-style';        // the look last chosen in this browser
-const CACHE_KEY = 'portrait-of-a-nation-style-cache';   // read by js/head.js to restyle before first paint
+const CHOICE_KEY = 'atlas-of-warmth-uk-style';        // the look last chosen in this browser (the old name, from before the rename, is still read)
+const CACHE_KEY = 'atlas-of-warmth-uk-style-cache';   // read by js/head.js to restyle before first paint
 
 // Every page setting a look can hold. Settings a look leaves out are reset to the built-in value
 // (css/style.css), so nothing carries over from the look shown before.
@@ -33,7 +33,7 @@ export async function loadLibrary(CONFIG, fail) {
 export function startingStyle(lib) {
   const byName = (n) => lib.styles.find((s) => s.name === n);
   let chosen = null;
-  try { chosen = localStorage.getItem(CHOICE_KEY); } catch {}
+  try { chosen = localStorage.getItem(CHOICE_KEY) ?? localStorage.getItem('portrait-of-a-nation-style'); } catch {}
   return byName(chosen) ?? byName(lib.default) ?? lib.styles[0] ?? null;
 }
 export function rememberChoice(name) { try { localStorage.setItem(CHOICE_KEY, name); } catch {} }
