@@ -11,7 +11,7 @@ Geography (area_level):
   lsoa21  England and Wales; 2011 output areas are converted to 2021 LSOAs with the ONS exact-fit lookup
           (output areas split between LSOAs are apportioned equally across their pieces: method_a = apportioned)
   dz11    Scotland data zones 2011, both dates (2011 and 2022 census)
-  soa11   Northern Ireland super output areas 2011, 2011 census (2021 needs small-area tables; blank until supplied)
+  sdz21   Northern Ireland super data zones 2021; 2011 census SOAs converted by 2021 data-zone population
 
 Usage: python tools/build_census_dataset.py --oa-lookup <OA11->OA21 csv> --lsoa-lookup <OA21->LSOA21 csv> \
          --ni-dir <folder with the four 2011 NI xlsx>  --sc2022-dir <folder with the Scottish 2022 tables> [--out source/census_data]
@@ -22,6 +22,7 @@ import glob
 import json
 from pathlib import Path
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 
@@ -42,6 +43,7 @@ ETH_DETAIL = {  # detail id -> (broad, label)
     "asian_other": ("asian", "Asian: other"),
     "black_african": ("black", "Black: African"), "black_caribbean": ("black", "Black: Caribbean"),
     "black_other": ("black", "Black: other"),
+    "asian_all": ("asian", "Asian (not split, Northern Ireland)"), "black_all": ("black", "Black (not split, Northern Ireland)"),
     "other_arab": ("other", "Other: Arab"), "other_any": ("other", "Other: any other ethnic group"),
 }
 REL_BROAD = {"christian": "Christian", "buddhist": "Buddhist", "hindu": "Hindu", "jewish": "Jewish", "muslim": "Muslim",
@@ -53,7 +55,10 @@ REL_DETAIL = {"christian": ("christian", "Christian (not split)"),
               "catholic": ("christian", "Catholic (Northern Ireland)"),
               "presbyterian": ("christian", "Presbyterian (NI)"), "church_of_ireland": ("christian", "Church of Ireland (NI)"),
               "methodist": ("christian", "Methodist (NI)"),
-              "pagan": ("other_religion", "Pagan (Scotland 2022 only)")}
+              "pagan": ("other_religion", "Pagan (Scotland 2022 only)"),
+              "muslim_ni": ("other_religion", "Muslim (Northern Ireland: counted within other religions)"),
+              "hindu_ni": ("other_religion", "Hindu (Northern Ireland: counted within other religions)"),
+              "other_christian_ni": ("christian", "Other Christian denominations (Northern Ireland)")}
 for k in ("buddhist", "hindu", "jewish", "muslim", "sikh", "other_religion", "no_religion", "not_stated"):
     REL_DETAIL.setdefault(k, (k, REL_BROAD[k]))
 BIRTH_BROAD = {"uk": "United Kingdom", "europe_ex_uk": "Europe outside the UK", "outside_europe": "Outside Europe"}
@@ -64,6 +69,8 @@ BIRTH_DETAIL = {"uk": ("uk", "United Kingdom"),
                 "africa": ("outside_europe", "Africa"), "middle_east_asia": ("outside_europe", "Middle East and Asia"),
                 "americas": ("outside_europe", "The Americas and the Caribbean"),
                 "oceania_other": ("outside_europe", "Antarctica, Oceania and other"),
+                "ireland": ("europe_ex_uk", "Republic of Ireland (Northern Ireland)"),
+                "eu_other": ("europe_ex_uk", "Other EU countries (Northern Ireland)"),
                 "other_unspecified": ("outside_europe", "Other (not split; Northern Ireland 2011 also holds non-EU Europe)")}
 LANG_BROAD = {"english_main": "English (or Welsh in Wales) is main language", "other_main": "Another main language"}
 LANG_DETAIL = {"english_main": ("english_main", "English main language"),
@@ -356,30 +363,90 @@ def ni2011(ni_dir):
                                           "value": pd.to_numeric(t[c], errors="coerce").values}))
         return pd.concat(rows).groupby(["area_code", "det"], as_index=False).value.sum()
 
-    eth = {"White": "white_all", "Chinese": "asian_chinese", "Irish Traveller": "white_traveller", "Indian": "asian_indian",
-           "Pakistani": "asian_pakistani", "Bangladeshi": "asian_bangladeshi", "Other Asian": "asian_other",
-           "Black Caribbean": "black_caribbean", "Black African": "black_african", "Black other": "black_other",
+    eth = {"White": "white_all", "Chinese": "asian_all", "Irish Traveller": "white_all", "Indian": "asian_all",
+           "Pakistani": "asian_all", "Bangladeshi": "asian_all", "Other Asian": "asian_all",
+           "Black Caribbean": "black_all", "Black African": "black_all", "Black other": "black_all",
            "Mixed": "mixed_all", "Other": "other_any"}
     res["ethnic"] = tidy(read("ks201"), lambda c: eth.get(c.split(": ", 1)[1]))
     rel = {"Catholic": "catholic", "Presbyterian Church in Ireland": "presbyterian", "Church of Ireland": "church_of_ireland",
-           "Methodist Church in Ireland": "methodist", "Other Christian (including Christian related)": "other_christian",
+           "Methodist Church in Ireland": "methodist", "Other Christian (including Christian related)": "other_christian_ni",
            "Other religions": "other_religion", "No religion": "no_religion", "Religion not stated": "not_stated"}
     res["religion"] = tidy(read("ks211"), lambda c: rel.get(c.split(": ", 1)[1]))
-    cob = {"Northern Ireland": "uk", "England": "uk", "Scotland": "uk", "Wales": "uk", "Republic of Ireland": "eu14",
-           "Other EU: Member countries prior to 2004 expansion": "eu14", "Other EU: Accession countries 2004 onwards": "eu_accession",
-           "Other": "other_unspecified"}
+    cob = {"Northern Ireland": "uk", "England": "uk", "Scotland": "uk", "Wales": "uk", "Republic of Ireland": "ireland",
+           "Other EU: Member countries prior to 2004 expansion": "eu_other",
+           "Other EU: Accession countries 2004 onwards": "eu_other", "Other": "other_unspecified"}
     res["birth"] = tidy(read("ks204"), lambda c: cob.get(c.split(": ", 1)[1]))
-    lang = {"English": "english_main", "Polish": "polish", "Lithuanian": "lithuanian", "Irish (Gaelic)": "irish"}
-
-    def lg(c):
-        k = c.split(": ")[1]
-        return lang.get(k, "other_main_unsplit")
-    res["language"] = tidy(read("ks207"), lg)
+    res["language"] = tidy(read("ks207"), lambda c: "english_main" if c.split(": ")[1] == "English" else "other_main_unsplit")
     return res
 
 
+def ni2021(ni21_dir, dz_shp):
+    """Northern Ireland 2021 tables: data zones summed to super data zones; religion is already on super data zones."""
+    dzg = gpd.read_file(dz_shp)[["DZ2021_cd", "SDZ2021_cd"]]
+    to_sdz = dict(zip(dzg.DZ2021_cd, dzg.SDZ2021_cd))
+    res, dz_pop = {}, None
+
+    def read(key):
+        return pd.read_csv(glob.glob(f"{ni21_dir}/*{key}*.csv")[0], dtype=str)
+
+    def tidy(d, mapper, to_super=True):
+        d = d.copy()
+        d.columns = ["code", "label", "cat_code", "cat", "count"]
+        d["det"] = d.cat.map(mapper)
+        d = d.dropna(subset=["det"])
+        d["value"] = pd.to_numeric(d["count"], errors="coerce")
+        if to_super:
+            d["code"] = d.code.map(to_sdz)
+        return d.groupby(["code", "det"], as_index=False).value.sum().rename(columns={"code": "area_code"})
+
+    e = read("dz21ethnic")
+    e.columns = ["code", "label", "cat_code", "cat", "count"]
+    dz_pop = e.assign(v=pd.to_numeric(e["count"], errors="coerce")).groupby("code").v.sum()
+    res["ethnic"] = tidy(read("dz21ethnic"), {"White": "white_all", "Asian": "asian_all", "Black": "black_all",
+                                              "Mixed": "mixed_all", "Other": "other_any"})
+    res["birth"] = tidy(read("dz21cob"), {
+        "Europe: United Kingdom: Northern Ireland": "uk", "Europe: United Kingdom: England, Scotland and Wales": "uk",
+        "Europe: Ireland": "ireland", "Europe: Other EU countries": "eu_other", "Europe: Other Non-EU countries": "europe_non_eu",
+        "Africa": "africa", "Middle East and Asia": "middle_east_asia", "The Americas and the Caribbean": "americas",
+        "Antarctica, Oceania and Other": "oceania_other"})
+    res["language"] = tidy(read("dz21main"), {"English": "english_main", "Other languages": "other_main_unsplit"})
+    rel = {"Christian: Catholic": "catholic", "Christian: Presbyterian Church in Ireland": "presbyterian",
+           "Christian: Church of Ireland": "church_of_ireland", "Christian: Methodist Church in Ireland": "methodist",
+           "Other Religions: Muslim": "muslim_ni", "Other Religions: Hindu": "hindu_ni",
+           "Other Religions: Other Religions": "other_religion", "No religion": "no_religion", "Religion not stated": "not_stated"}
+    for k in range(5, 15):
+        pass
+    d = read("sdz21religion")
+    cats = d.iloc[:, 3].unique()
+    for c in cats:
+        if c.startswith("Christian: ") and c not in rel:
+            rel[c] = "other_christian_ni"
+    res["religion"] = tidy(d, rel, to_super=False)
+    return res, dz_pop
+
+
+def soa11_to_sdz21(df11, soa_shp, dz_shp, dz_pop):
+    """Apportion 2011 SOA counts to 2021 super data zones, weighting the pieces by 2021 data-zone population x overlap."""
+    soa = gpd.read_file(soa_shp)[["SOA_CODE", "geometry"]].to_crs(27700)
+    dz = gpd.read_file(dz_shp)[["DZ2021_cd", "SDZ2021_cd", "geometry"]].to_crs(27700)
+    dz["dz_area"] = dz.area
+    dz["pop"] = dz.DZ2021_cd.map(dz_pop).fillna(0)
+    soa["soa_area"] = soa.area
+    ov = gpd.overlay(soa, dz, how="intersection", keep_geom_type=True)
+    ov["piece"] = ov.area
+    ov = ov[ov.piece > 1]
+    ov["w0"] = ov["pop"] * ov.piece / ov.dz_area
+    tot = ov.groupby("SOA_CODE").w0.transform("sum")
+    ov["w"] = np.where(tot > 0, ov.w0 / tot, ov.piece / ov.groupby("SOA_CODE").piece.transform("sum"))
+    w = ov.groupby(["SOA_CODE", "SDZ2021_cd"], as_index=False).w.sum()
+    x = df11.merge(w, left_on="area_code", right_on="SOA_CODE")
+    x["value"] = x.value * x.w
+    g = x.groupby(["SDZ2021_cd", "det"], as_index=False).value.sum().rename(columns={"SDZ2021_cd": "area_code"})
+    return g
+
+
 # ---------------------------------------------------------------- assemble ---------------------------------------
-YEARS = {"lsoa21": (2011, 2021), "dz11": (2011, 2022), "soa11": (2011, 2021)}
+YEARS = {"lsoa21": (2011, 2021), "dz11": (2011, 2022), "sdz21": (2011, 2021)}
 QUALITY = {"ethnic": "high", "religion": "high", "birth": "medium", "language": "medium"}
 
 
@@ -422,7 +489,10 @@ def main():
     ap.add_argument("--ew-dir", default="source/census/ew")
     ap.add_argument("--sc11-dir", default="source/census/sc11")
     ap.add_argument("--sc22-dir", required=True)
-    ap.add_argument("--ni-dir", required=True)
+    ap.add_argument("--ni-dir", required=True, help="folder with the four 2011 NI xlsx")
+    ap.add_argument("--ni21-dir", required=True, help="folder with the four NI 2021 csv tables")
+    ap.add_argument("--soa11", required=True, help="NI SOA 2011 shapefile")
+    ap.add_argument("--dz21", required=True, help="NI 2021 data zone shapefile")
     ap.add_argument("--oa-lookup", required=True)
     ap.add_argument("--lsoa-lookup", required=True)
     ap.add_argument("--out", default="source/census_data")
@@ -442,9 +512,11 @@ def main():
     for topic, (d11, d22) in scotland(a.sc11_dir, a.sc22_dir).items():
         frames.append(assemble("dz11", topic, d11, d22))
         print("Scotland", topic, "ok")
+    ni21, dz_pop = ni2021(a.ni21_dir, a.dz21)
     for topic, d11 in ni2011(a.ni_dir).items():
-        frames.append(assemble("soa11", topic, d11, None))
-        print("NI", topic, "2011 only")
+        conv = soa11_to_sdz21(d11, a.soa11, a.dz21, dz_pop)
+        frames.append(assemble("sdz21", topic, conv, ni21[topic], {}))
+        print("NI", topic, "ok")
 
     x = pd.concat(frames, ignore_index=True)
     for c in ("count_a", "count_b", "total_a", "total_b"):
@@ -458,7 +530,7 @@ def main():
             "how_to_combine": "Pick a topic, a grain (broad or detail, never both) and the groups to include; sum count_a and count_b "
                               "for the ticked groups; share = count / total; net = count_b - count_a; share change in percentage points.",
             "levels": {"lsoa21": "England and Wales 2021 LSOAs (2011 converted)", "dz11": "Scotland data zones 2011",
-                       "soa11": "Northern Ireland super output areas 2011"},
+                       "sdz21": "Northern Ireland super data zones 2021 (2011 SOAs converted)"},
             "years": {k: list(v) for k, v in YEARS.items()},
             "topics": {t: {"broad": b, "detail": {k: v[1] for k, v in dd.items()}} for t, (b, dd) in TOPICS.items()},
             "notes": {
@@ -470,7 +542,9 @@ def main():
                 "language": "England and Wales: main language English (or Welsh in Wales) vs another language, from the proficiency tables. "
                             "Scotland 2022 is main language; Scotland 2011 asked about language used at home, so the change is only indicative (quality low).",
                 "method_a": "'apportioned' = 2011 output areas that straddle 2021 LSOAs were split equally between the pieces.",
-                "northern_ireland": "2021 small-area tables are still needed; count_b is blank for Northern Ireland."}}
+                "northern_ireland": "2021 groups are coarse (5 ethnic groups, 9 birth groups, English vs other language); 2011 was collapsed to match. "
+                                    "Religion: Muslim and Hindu are counted within other religions in both years for comparability. Country of birth: 2011 'Other' "
+                                    "includes non-EU Europe, which 2021 reports separately. Irish Travellers are counted as White in 2011. Religion not stated fell from 2011 to 2021 (122k to 31k) partly because the 2021 question was answered more often, so read NI religion shifts between 'no religion' and 'not stated' with care."}}
     cats["notes"]["language_scotland_quality"] = "low"
     (out / "census_categories.json").write_text(json.dumps(cats, indent=1))
     print(x.groupby(["area_level", "topic"]).area_code.nunique())
