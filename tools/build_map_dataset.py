@@ -7,7 +7,7 @@ the ticked categories and then works out net, gains, losses and their percentage
 
 Outputs in --out (default source/map_data):
   categories.json            layers, categories, windows, measures, rules (the map builds its filters from this)
-  area_changes_zone.csv      zone level (msoa21 / iz22 / soa11 / msoa11): one row per area x window x category
+  area_changes_zone.csv      zone level (msoa21 / iz22 / soa11 / msoa11 / iz01): one row per area x window x category
   area_changes_lad.csv       local authority (LAD 2026) level, same columns
   spaces_points.csv          one row per located space (OSM spaces, charities) for dots / drill-down
   london_calibration.csv     London FOI council-run counts next to OSM change per borough (check, not a layer)
@@ -76,7 +76,7 @@ def layer_cs(flows):
               "gains", "losses", "gains_raw", "losses_raw"]]
 
 
-def layer_biz(nomis_path, zones11, lads):
+def layer_biz(nomis_path, zones11, lads, iz01=None):
     n = pd.read_csv(nomis_path, dtype={"area_code": str})
     n = n[(n.area_type == "msoa11") & (n.status == "A")].copy()
     n["count"] = pd.to_numeric(n["count"], errors="coerce")
@@ -98,6 +98,22 @@ def layer_biz(nomis_path, zones11, lads):
     t["category"] = "biz." + t.industry
     t["quality"] = "medium"  # counts are rounded to the nearest 5 at this level
     zone = t.assign(area_level="msoa11")
+    if iz01 is not None:  # Scotland: Nomis small areas are 2001 intermediate zones
+        ns = pd.read_csv(nomis_path, dtype={"area_code": str})
+        ns = ns[(ns.area_type == "iz_scotland") & (ns.status == "A")].copy()
+        ns["count"] = pd.to_numeric(ns["count"], errors="coerce")
+        ps = ns.pivot_table(index=["area_code", "industry"], columns="year", values="count", aggfunc="sum")
+        srows = []
+        for a_, b_ in ((2016, 2024), (2019, 2024), (2021, 2024)):
+            u = ps[[a_, b_]].dropna().reset_index().rename(columns={a_: "stock_a", b_: "stock_b"})
+            u["window"] = f"{a_}-{b_}"
+            srows.append(u)
+        sz = pd.concat(srows)
+        sz["layer"], sz["source"] = "biz", "nomis_uk_business_counts"
+        sz["category"] = "biz." + sz.industry
+        sz["quality"] = "medium"
+        sz["area_level"] = "iz01"
+        zone = pd.concat([zone, sz], ignore_index=True)
     # council level comes straight from Nomis (all UK, incl. Scotland and NI)
     nl = pd.read_csv(nomis_path, dtype={"area_code": str})
     nl = nl[(nl.area_type == "lad26") & (nl.status == "A")].copy()
@@ -205,6 +221,8 @@ def main():
     ap.add_argument("--points", default="source/derived/community_spaces_points.csv")
     ap.add_argument("--nomis", default="source/nomis/business_counts_local_units.csv")
     ap.add_argument("--msoa11", required=True)
+    ap.add_argument("--iz01", help="Scottish 2001 intermediate zone boundary (shp) for small-area Scottish businesses")
+    ap.add_argument("--dz11-centroids", default="data/dz-2011-s-centroids.csv")
     ap.add_argument("--zones", nargs="+", required=True)
     ap.add_argument("--lad", required=True)
     ap.add_argument("--lad-code", default="LAD26CD")
@@ -222,11 +240,20 @@ def main():
     names = gpd.read_file(a.lad)[[a.lad_code, a.lad_name]].drop_duplicates().rename(
         columns={a.lad_code: "code", a.lad_name: "name"})
     m11 = read_polygons(a.msoa11, "CODE")
+    iz01 = None
+    if a.iz01:
+        iz01 = read_polygons(a.iz01, "IZ_CODE")
+        dz = pd.read_csv(a.dz11_centroids)
+        pts = gpd.GeoDataFrame(dz[["code"]], geometry=gpd.points_from_xy(dz.lon, dz.lat), crs="EPSG:4326").to_crs(BNG)
+        pts.index = pts["code"].values
+        lk = place_points(pts[["geometry"]], iz01).rename("iz01_code").rename_axis("dz11_code").reset_index()
+        lk.to_csv(out / "lookup_dz11_to_iz01.csv", index=False)
+        print("DZ 2011 -> IZ 2001:", lk.iz01_code.notna().sum(), "of", len(lk), "placed")
 
     flows = pd.read_csv(a.flows)
     cs_zone = layer_cs(flows[flows.level == "zone"])
     cs_lad = layer_cs(flows[flows.level == "lad"])
-    biz_zone, biz_lad = layer_biz(a.nomis, m11, lads)
+    biz_zone, biz_lad = layer_biz(a.nomis, m11, lads, iz01)
     zone_parts, lad_parts = [cs_zone, biz_zone], [cs_lad, biz_lad]
     points = pd.read_csv(a.points)
     pts = points.assign(space_id=points.osm_id, layer="cs", category="cs." + points.space_type, source="osm",
@@ -280,7 +307,7 @@ def main():
         ],
         "how_to_combine": "add stock_a, stock_b, gains and losses over the ticked categories first, then work out the measure",
         "rules": {"min_stock_a_for_percent": 3, "recommended_window": "2022-2025 for layer cs",
-                  "area_levels": ["msoa21", "iz22", "soa11", "msoa11", "lad26"]},
+                  "area_levels": ["msoa21", "iz22", "soa11", "msoa11", "iz01", "lad26"]},
         "layers": [
             {"id": l, "label": LAYER_LABEL[l], "flows": {"cs": "gains_and_losses", "biz": "net_only",
                                                            "char": "gains_only", "cs_council": "gains_and_losses"}[l],
@@ -292,7 +319,7 @@ def main():
         "notes": {
             "cs": "OpenStreetMap volunteer mapping: use 2022-2025; longer windows are inflated by growing coverage. "
                   "gains/losses exclude re-mapped duplicates and losses where an OS hall is still present.",
-            "biz": "UK Business Counts local units, rounded to 5. Councils: whole UK incl. Scotland and NI (2015-2025 and shorter windows). Small areas: England and Wales only (2011 MSOAs, 2016-2024); small-area Scotland pending a 2001 intermediate zone boundary or lookup.",
+            "biz": "UK Business Counts local units, rounded to 5. Councils: whole UK incl. Scotland and NI (2015-2025 and shorter windows). Small areas: England and Wales only (2011 MSOAs, 2016-2024); Scotland small areas are 2001 intermediate zones (area_level iz01; lookup_dz11_to_iz01.csv paints them onto 2011 data zones), 2016-2024.",
             "char": "Charities placed by postcode; removed charities carry no postcode, so only gains and stock are "
                     "located. National removals by window: " + json.dumps(national_losses),
             "cs_council": "London FOI to councils (Jan 2024): council-run spaces only; definitions differ by borough; "
