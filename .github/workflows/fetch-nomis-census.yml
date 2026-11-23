@@ -1,0 +1,49 @@
+# Downloads census small-area tables from Nomis: 2011 on output areas, 2021 on LSOAs (England and Wales).
+name: Fetch Nomis census tables
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [community-closures-data]
+    paths:
+      - ".github/workflows/fetch-nomis-census.yml"
+      - "tools/fetch_nomis_census.py"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {id: eth11, dataset: NM_522_1, geography: TYPE299}
+          - {id: rel11, dataset: NM_529_1, geography: TYPE299}
+          - {id: cob11, dataset: NM_524_1, geography: TYPE299}
+          - {id: lang11, dataset: NM_525_1, geography: TYPE299}
+          - {id: eth21, dataset: NM_2041_1, geography: TYPE151}
+          - {id: rel21, dataset: NM_2049_1, geography: TYPE151}
+          - {id: cob21, dataset: NM_2024_1, geography: TYPE151}
+          - {id: lang21msoa, dataset: NM_2043_1, geography: TYPE152}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python tools/fetch_nomis_census.py --dataset ${{ matrix.dataset }} --geography ${{ matrix.geography }} --out ${{ matrix.id }}.csv.gz --allow-empty
+      - name: Keep the result on a throwaway branch
+        run: |
+          mkdir -p /tmp/keep && cp ${{ matrix.id }}.csv.gz /tmp/keep/
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --orphan workflow-data-census-${{ matrix.id }}
+          git rm -rf --cached -q . || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/keep/* .
+          git add ./*.gz
+          git commit -q -m "Census table ${{ matrix.id }} (workflow output)"
+          git push --force origin workflow-data-census-${{ matrix.id }}
