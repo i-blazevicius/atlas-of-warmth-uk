@@ -231,7 +231,7 @@ export default {
       ],
       topicNotes: {
         ethnic: { S: 'Scotland’s census used its own list of groups, fitted here into the broad groups (“Black” includes African and Caribbean).', N: 'Northern Ireland’s 2021 groups are coarse; 2011 was collapsed to match.' },
-        religion: { N: 'Muslim and Hindu are counted within “other religion” in Northern Ireland in both years. “Religion not stated” fell partly because the 2021 question was answered more often, so read shifts between “no religion” and “not stated” with care.' },
+        religion: { N: 'Buddhist, Hindu, Jewish, Muslim and Sikh are counted within “other religion” in Northern Ireland in both years, so those groups show no data there (a selection that includes any of them has no data in Northern Ireland). “Religion not stated” fell partly because the 2021 question was answered more often, so read shifts between “no religion” and “not stated” with care.' },
         birth: { N: 'Northern Ireland’s 2011 “other” birthplace group includes non-EU Europe, which 2021 reports separately: read changes in “Europe outside the UK” and “Outside Europe” with care.' },
         language: { S: '2011 asked about the language used at home and 2022 about the main language, so the change is only indicative.' },
       },

@@ -8,6 +8,7 @@ const Styles = await import(`./styles.js${q}`);
 const { scaleModel, thinLabels } = await import(`./scalebar.js${q}`);
 const { gridLayout } = await import(`./legendgrid.js${q}`);
 const Community = await import(`./community.js${q}`);
+await import(`./select.js${q}`);
 const core = createCore(CONFIG);
 const { state, esc, fail, problem, resolveColumns, loadCSV } = core;
 state.hashCode = '';

@@ -269,6 +269,14 @@ select { -webkit-appearance: none; appearance: none; border-radius: 0; padding-r
   background-repeat: no-repeat; background-position: right 6px center; background-size: 8px 5px; }
 select:disabled { color: var(--ink-faint); }
 select.fixed { background-image: none; padding-right: 2px; pointer-events: none; }
+/* The opened list (js/select.js): square, plain, same type as the box it belongs to */
+.sel-pop { position: fixed; z-index: 1000; overflow-y: auto; box-sizing: border-box; background: #fff; color: var(--ink);
+  border: 1px solid var(--ink-dim); border-radius: 0; box-shadow: none; padding: 0; }
+.sel-opt { padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.sel-opt.grouped { padding-left: 16px; }
+.sel-opt.on { background: var(--ink); color: #fff; }
+.sel-opt.off { color: var(--ink-faint); cursor: default; }
+.sel-group { padding: 4px 8px 2px; color: var(--ink-faint); font-size: 0.9em; }
 
 /* Click panel: one folded section per dataset */
 details.panel-section { margin-top: 10px; border-top: 1px solid var(--panel-line); padding-top: 6px; }

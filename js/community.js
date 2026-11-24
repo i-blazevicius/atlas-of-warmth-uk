@@ -4,6 +4,8 @@
 //  to repaint (ctx.refresh). Everything else (comparison, highlighting, PDF) treats the result as any other rate measure.
 // ─────────────────────────────────────────────────────────────
 
+const { fineClasses } = await import(`./classes.js${new URL(import.meta.url).search}`);   // same cache-busting as the page's own modules
+
 // ── Colours and class edges ────────────────────────────────
 const SEQUENTIAL = ['#edf8fb', '#bfd3e6', '#9ebcda', '#8c96c6', '#8856a7', '#810f7c'];
 // Losses run through browns, gains through greens; the lightest class in the middle is "little change".
@@ -350,7 +352,15 @@ export async function createCommunities(cfg, ctx) {
           codes[i] = r.code; ta[i] = Number(r.total_a); tb[i] = Number(r.total_b);
           topic.cats.forEach((c, k) => { a[k][i] = Number(r[`${c.id}_a`]); b[k][i] = Number(r[`${c.id}_b`]); });
         });
-        const d = { n, codes, ta, tb, a, b, at: new Map(codes.map((c, i) => [c, i])) };
+        const d = { n, codes, ta, tb, a, b, at: new Map(codes.map((c, i) => [c, i])), off: new Map() };
+        // A group that is zero in every area of a nation, in both censuses, is not published separately there (it sits inside
+        // another group): it is "no data" for that nation, not 0%.
+        for (const nation of ['E', 'W', 'S', 'N']) {
+          const idx = []; codes.forEach((c, i) => { if (NATION_OF(c) === nation) idx.push(i); });
+          if (idx.length < 50) continue;
+          const gone = new Set(topic.cats.filter((c, k) => idx.every((i) => !(a[k][i] > 0) && !(b[k][i] > 0))).map((c) => c.id));
+          if (gone.size) d.off.set(nation, gone);
+        }
         if (!rowList) {
           rowList = codes.map((code) => ({ code, name: '', nation: NATION_OF(code), pname: '', value: '' }));
           rowList.forEach((row) => {
@@ -385,11 +395,11 @@ export async function createCommunities(cfg, ctx) {
     const d = await load(st.topic);
     const { subject, mode } = describe(), set = selected(), vals = [];
     for (let i = 0; i < d.n; i++) {
-      const f = figures(d, i, set), v = set.size ? valueFrom(f) : null;
+      const gone = d.off.get(rowList[i].nation), f = figures(d, i, set), v = set.size && !(gone && [...set].some((id) => gone.has(id))) ? valueFrom(f) : null;
       rowList[i].value = v == null || !Number.isFinite(v) ? '' : v;
       if (rowList[i].value !== '') vals.push(v);
     }
-    measure.classes = makeClasses(vals, mode.diverging, mode.unit);
+    measure.classes = fineClasses(vals, mode.diverging, mode.unit);
     const when = st.mode === 'share' ? `, ${yearText(st.year)}` : '';
     measure.label = `${subject} · ${mode.short}${when}`;
     measure.legendTitle = [`${mode.label}${when}`, subject, 'Communities · census areas'];
@@ -454,10 +464,11 @@ export async function createCommunities(cfg, ctx) {
         const d = loaded[ti], i = d.at.get(code);
         if (i == null) return;
         const active = t === st.topic && state.active?.dataset === ds;
-        const line = (name, f, cls = '') => `<tr class="${cls}"><th>${esc(name)}</th><td>${pc(f.shareA)}</td><td>${pc(f.shareB)}</td><td>${f.net > 0 ? '+' : f.net < 0 ? MINUS : ''}${n(Math.abs(f.net))}</td><td>${f.pct == null ? '–' : `${sg(f.pct)}%`}</td></tr>`;
+        const gone = d.off.get(nation);
+        const line = (name, f, cls = '', off = false) => off ? `<tr class="${cls}"><th>${esc(name)}</th><td colspan="4">not published separately here</td></tr>` : `<tr class="${cls}"><th>${esc(name)}</th><td>${pc(f.shareA)}</td><td>${pc(f.shareB)}</td><td>${f.net > 0 ? '+' : f.net < 0 ? MINUS : ''}${n(Math.abs(f.net))}</td><td>${f.pct == null ? '–' : `${sg(f.pct)}%`}</td></tr>`;
         h += `<p class="panel-sub">${esc(t.label)}</p><table class="split"><thead><tr><th></th><th>${y0}</th><th>${y1}</th><th>Net</th><th>%</th></tr></thead><tbody>`;
-        if (active && selected().size > 1 && selected().size < t.cats.length) h += line(`Selected (${selected().size})`, figures(d, i, selected(), t), 'total');
-        t.cats.forEach((c) => { h += line(c.label, figures(d, i, new Set([c.id]), t), active && selected().has(c.id) ? 'chosen' : ''); });
+        if (active && selected().size > 1 && selected().size < t.cats.length && !(gone && [...selected()].some((id) => gone.has(id)))) h += line(`Selected (${selected().size})`, figures(d, i, selected(), t), 'total');
+        t.cats.forEach((c) => { h += line(c.label, figures(d, i, new Set([c.id]), t), active && selected().has(c.id) ? 'chosen' : '', !!gone?.has(c.id)); });
         h += `</tbody></table><p class="panel-note">Share of residents in ${y0} and ${y1}; net and % are the change in the number of people. Residents: ${n(d.ta[i])} in ${y0}, ${n(d.tb[i])} in ${y1}.</p>`;
         const extra = cfg.topicNotes?.[t.id]?.[nation];
         if (extra) h += `<p class="panel-note">${esc(extra)}</p>`;
