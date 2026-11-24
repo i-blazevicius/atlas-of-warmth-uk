@@ -19,7 +19,7 @@
   --font-body: 'Noto Sans', system-ui, sans-serif;
   --font-ui: 'Noto Sans', system-ui, sans-serif;
   --font-label: 'Noto Sans', system-ui, sans-serif;
-  --font-category: 'Montserrat', 'Noto Sans', system-ui, sans-serif;
+  --font-category: Helvetica, Arial, sans-serif;
   --category-weight: 600;
   --category-size: 12.5px;
   --style-category: normal;
