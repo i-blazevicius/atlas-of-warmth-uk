@@ -45,9 +45,10 @@ map colours and the 10-class colour ramp (`map`). Settings it leaves out go back
   a measure is in `js/config.js` → `measures[].names`. England, Wales and Scotland's overall SIMD come with official
   deciles; Scotland's domain deciles and all of Northern Ireland's are derived from the ranks by the same rule
   (listed in `data/deprivation-uk-derived.csv`). Scotland's tied domain ranks are kept as half ranks (e.g. 5955.5).
-- **Click panel**: every dataset that has values for the area, whichever mode is active (a dataset with nothing for that kind of area is left out). One coloured block per measure the area's nation has, with the
+- **Click panel**: the active category or measure is at the top, open. Every other dataset that has values for the area is listed below it, folded, in the same order as the left-hand controls; click the caret to open one. Open/closed states are remembered when you click another area, and are reset to folded only when you pick a different category on the controls (in Compare mode the two compared datasets open by default). Each dataset shows one coloured block per measure the area's nation has, with the
   decile inside and the nation's own name; hovering shows the rank within the nation. England's areas also get their
-  local authority's rank.
+  local authority's rank. Community Spaces and Communities fill their tables only when opened (Communities reads its four files then).
+- **Selectors**: dropdowns are square-cornered like the rest of the panel. A selector with only one option (for example the later year when a source has one year, or the year under the Communities change modes) is shown fixed: no arrow, not clickable, not greyed.
 - **Indicators behind a domain**: click a decile block or its name in the click panel to open the indicators the
   domain is calculated from (raw values, with the nation's median for context). Nothing is loaded until then: first
   `data/indicators/index.json`, then one small CSV per nation and domain (`data/indicators/<N>-<measure>.csv`). Built by

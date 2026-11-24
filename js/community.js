@@ -251,7 +251,8 @@ export async function createSpaces(cfg, ctx) {
     syncControls();
   }
   // Called by the page when the group becomes the live one: the window pickers stay off when there is only one window.
-  function syncControls() { fromSel.disabled = toSel.disabled = st.src.windows_.length < 2; }
+  const fix = (sel) => { sel.classList.toggle('fixed', sel.options.length < 2); sel.tabIndex = sel.options.length < 2 ? -1 : 0; };
+  function syncControls() { fix(fromSel); fix(toSel); }
   ds.syncControls = syncControls;
   function fillMeasures() {
     measureSel.replaceChildren(...MEASURES.map((m) => Object.assign(option(m.id, m.label), { disabled: !available(m.id) })));
@@ -286,11 +287,11 @@ export async function createSpaces(cfg, ctx) {
 
   // ── Click panel ──
   const yearsOf = () => [st.win.from, st.win.to];
-  ds.panelHtml = (code) => {
+  ds.panelBody = (code) => {
     const a = aggregate(st.src, st.win.id, code, wantedTypes()), row = ds.byCode.get(code);
     const def = MEASURES.find((m) => m.id === st.measure), cl = measure.classes, v = row.value === '' ? null : Number(row.value);
     const unit = def.unit ?? '';
-    let h = `<p class="control-label">${esc(cfg.label)}</p><p class="panel-sub">${esc(st.src.label)} · ${esc(windowText())}</p>`;
+    let h = `<p class="panel-sub">${esc(st.src.label)} · ${esc(windowText())}</p>`;
     if (!a) return h + `<p class="panel-note">${esc(st.src.label)} has no figures for this council in ${esc(windowText())}, or no type is ticked.</p>`;
     const colour = v == null ? ctx.NO_DATA : cl.colours[classOf(cl, v)];
     const shown = v == null ? '–' : `${def.diverging ? signed(v, unit === '%' ? 1 : 0) : v.toLocaleString('en-GB', { maximumFractionDigits: unit === '%' ? 1 : 0 })}${unit}`;
@@ -421,9 +422,15 @@ export async function createCommunities(cfg, ctx) {
     r.addEventListener('change', () => { st.topic = t; fillTypes(); typeBox.open = true; refreshNow(); });
     topicBox.append(el('label', {}, r, el('span', { textContent: t.label })));
   }
-  const syncYear = () => { yearSel.disabled = st.mode !== 'share'; };
+  // The year picks the census for a share; for a change both censuses are used, so the box just says so and does not open.
+  const syncYear = () => {
+    if (st.mode === 'share') yearSel.replaceChildren(option('a', yearText('a')), option('b', yearText('b')));
+    else yearSel.replaceChildren(option('both', '2011 to 2021 (Scotland 2022)'));
+    if (st.mode === 'share') yearSel.value = st.year;
+    yearSel.classList.toggle('fixed', st.mode !== 'share'); yearSel.tabIndex = st.mode === 'share' ? 0 : -1;
+  };
   modeSel.addEventListener('change', () => { st.mode = modeSel.value; syncYear(); refresh(); });
-  yearSel.addEventListener('change', () => { st.year = yearSel.value; refresh(); });
+  yearSel.addEventListener('change', () => { if (st.mode === 'share') { st.year = yearSel.value; refresh(); } });
   controls.append(fieldRow('Show', modeSel), fieldRow('Year', yearSel), el('p', { className: 'control-label', textContent: 'Group (one at a time)' }), topicBox, typeBox, statusBox);
   fillTypes(); syncYear();
   ds.controls = controls;
@@ -433,7 +440,7 @@ export async function createCommunities(cfg, ctx) {
 
   // ── Click panel ──
   // Every group is shown, so the other three files are read when an area is opened.
-  ds.panelHtml = () => `<p class="control-label">${esc(cfg.label)}</p><div class="dyn-panel" data-dyn="${esc(ds.id)}"><p class="panel-note">Loading…</p></div>`;
+  ds.panelBody = () => '<p class="panel-note">Loading…</p>';
   ds.afterPanel = async (code, box) => {
     try {
       const loaded = await Promise.all(topics.map((t) => load(t)));

@@ -765,8 +765,9 @@ function renderLegend() {
 function openArea(code) {
   state.selected = code;
   for (const a of AREA_SETS) map.setFilter(`selected-${a.id}`, ['==', ['get', a.code], code]);
-  // A dataset worked out from the visitor's ticks (Community Spaces, Communities) is listed only while it is on the map.
-  const entries = (state.rows.get(code) ?? []).filter((e) => !e.dataset.dynamic || e.dataset.visible);
+  // Which sections are folded is remembered from area to area; choosing another category on the controls panel forgets it.
+  if (state.foldOwner !== state.active?.dataset) { state.foldOwner = state.active?.dataset; state.fold.clear(); state.expanded.clear(); }
+  const entries = state.rows.get(code) ?? [];
   const bm = state.active?.measure?.kind === 'bivariate' ? state.active.measure : null;
   let biHtml = '';
   if (bm) {
@@ -789,15 +790,19 @@ function openArea(code) {
     if (hh) html += `<p class="panel-households" title="${esc(hh.basis)}">${nation === 'N' ? 'about ' : ''}${fmt(hh.n)} households</p>`;
     html += biHtml;
   }
-  // The dataset on the map is listed first.
+  // The dataset on the map comes first and is open; the others follow in the order of the controls panel, folded
+  // (in a comparison, the two datasets compared are open).
   const live = state.active?.dataset;
+  const section = (ds, body) => {
+    const open = state.fold.has(ds.id) ? state.fold.get(ds.id) : ds === live || (!!bm && (bm.a.ds === ds || bm.b.ds === ds));
+    return `<details class="panel-section" data-sec="${esc(ds.id)}"${open ? ' open' : ''}><summary class="control-label">${esc(ds.label)}</summary>${body}</details>`;
+  };
   [...entries].sort((x, y) => (y.dataset === live) - (x.dataset === live)).forEach(({ dataset: ds, row }) => {
     const g = (k) => (ds.col[k] ? String(row[ds.col[k]] ?? '').trim() : '');
     const nation = g('nation') || NATION_OF(code);
-    if (ds.dynamic) { html += ds.panelHtml(code); return; }
-    const mark = html.length;
+    if (ds.dynamic) { html += section(ds, `<div class="dyn-panel" data-dyn="${esc(ds.id)}"></div>`); return; }      // filled when open
+    let body = '';
     let added = 0;
-    html += `<p class="control-label">${esc(ds.label)}</p>`;
     for (const m of ds.measures) {
       if (m.compareOnly) continue;
       if (m.names && !m.names[nation]) continue;            // this nation has no such measure
@@ -821,31 +826,47 @@ function openArea(code) {
       const key = `${ds.id}:${m.id}`;
       const expandable = !!m.indicators?.includes(nation) && !!ds.indicatorsDir;
       const open = expandable && state.expanded.has(key);
-      html += `<div class="panel-measure${cur ? ' current' : ''}${expandable ? ' expandable' : ''}${open ? ' open' : ''}"${tip ? ` data-tip="${esc(tip)}"` : ''}` +
+      body += `<div class="panel-measure${cur ? ' current' : ''}${expandable ? ' expandable' : ''}${open ? ' open' : ''}"${tip ? ` data-tip="${esc(tip)}"` : ''}` +
         (expandable ? ` data-key="${esc(key)}" data-ds="${esc(ds.id)}" data-m="${esc(m.id)}" data-nation="${esc(nation)}" role="button" tabindex="0" aria-expanded="${open}"` : '') + '>' +
         `<span class="block${has ? '' : ' none'}${rate ? ' wide' : ''}" style="background:${esc(colour)};color:${has ? textOn(colour) : 'inherit'}">${has ? (rate ? showRate(classesOf(ds, m), m, v) : v) : '–'}</span>` +
         `<span class="name">${esc(m.names?.[nation] ?? m.label)}</span>${expandable ? '<span class="caret" aria-hidden="true"></span>' : ''}</div>` +
         (open ? '<div class="indicators"></div>' : '') +
         (m.caution && cur ? `<p class="panel-note">${esc(m.caution)}</p>` : '');
     }
-    if (!added) { html = html.slice(0, mark); return; }               // this dataset has nothing for this kind of area
+    if (!added) return;                                               // this dataset has nothing for this kind of area
     const pr = ds.parentRanks?.rows.get(g('pcode'));
     const m0 = state.active?.dataset === ds ? state.active.measure : ds.measures[0];
     const prRank = pr && ds.parentRanks.cols[m0.id] ? Number(pr[ds.parentRanks.cols[m0.id]]) : NaN;
     if (Number.isFinite(prRank)) {
-      html += `<p class="panel-note">${esc(g('pname'))} ranks ${fmt(prRank)} of ${fmt(ds.parentRanks.total)} ${esc(ds.parentRanks.label)} on ${esc(m0.names?.[nation] ?? m0.label)} (rank of average rank; 1 = most deprived).</p>`;
+      body += `<p class="panel-note">${esc(g('pname'))} ranks ${fmt(prRank)} of ${fmt(ds.parentRanks.total)} ${esc(ds.parentRanks.label)} on ${esc(m0.names?.[nation] ?? m0.label)} (rank of average rank; 1 = most deprived).</p>`;
     }
     if (ds.inheritNote && g('x:inherited') === '1') {
-      html += `<p class="panel-note">${esc(ds.inheritNote.replace('{area}', g('x:cni area')))}</p>`;
+      body += `<p class="panel-note">${esc(ds.inheritNote.replace('{area}', g('x:cni area')))}</p>`;
     }
-    if (ds.flag && g(`x:${ds.flag.column}`) === '1') html += `<p class="panel-note">${esc(ds.flag.text)}</p>`;
-    html += `<p class="panel-note">${esc(ds.sources?.[nation] ?? '')} ${esc(ds.licence ?? '')}</p>`;
+    if (ds.flag && g(`x:${ds.flag.column}`) === '1') body += `<p class="panel-note">${esc(ds.flag.text)}</p>`;
+    body += `<p class="panel-note">${esc(ds.sources?.[nation] ?? '')} ${esc(ds.licence ?? '')}</p>`;
+    html += section(ds, body);
   });
   $('panel-body').innerHTML = html;
   $('panel').hidden = false;
-  for (const box of $('panel-body').querySelectorAll('.dyn-panel')) state.datasets.find((d) => d.id === box.dataset.dyn)?.afterPanel?.(code, box);
-  for (const head of $('panel-body').querySelectorAll('.panel-measure.open')) fillIndicators(head);   // domains left open stay open
+  for (const sec of $('panel-body').querySelectorAll('details.panel-section[open]')) fillSection(sec);
 }
+// What a folded section holds is read only once it is open: the census files for Communities, the indicators behind a domain.
+function fillSection(sec) {
+  for (const box of sec.querySelectorAll('.dyn-panel:empty')) {
+    const ds = state.datasets.find((d) => d.id === box.dataset.dyn);
+    box.innerHTML = ds.panelBody(state.selected);
+    ds.afterPanel?.(state.selected, box);
+  }
+  for (const head of sec.querySelectorAll('.panel-measure.open')) if (head.nextElementSibling?.matches('.indicators:empty')) fillIndicators(head);   // domains left open stay open
+}
+state.fold = new Map();                  // section id → open or folded, as the visitor left it
+$('panel-body').addEventListener('toggle', (e) => {
+  const sec = e.target;
+  if (!sec.matches?.('details.panel-section')) return;
+  state.fold.set(sec.dataset.sec, sec.open);
+  if (sec.open) fillSection(sec);
+}, true);
 
 // ── Indicators behind a domain ─────────────────────────────
 // Click a domain's decile block or name to open the indicators it is calculated from. They are read only then:

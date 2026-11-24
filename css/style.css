@@ -224,7 +224,7 @@ input[type="range"]::-moz-range-thumb { width: 5px; height: 18px; background: va
 /* Compare two measures */
 .bi-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
 .bi-row span { flex: none; width: 3.6em; color: var(--ink-dim); }
-.bi-row select { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 2px; border: 1px solid var(--panel-line); border-radius: 0; background: var(--panel-bg); color: var(--ink); }
+.bi-row select { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 2px; border: 1px solid var(--panel-line); border-radius: 0; background-color: var(--panel-bg); color: var(--ink); }
 .bi-swap { margin: 2px 0 0 3.6em; font: inherit; font-size: 12px; cursor: pointer; }
 .bigrid { display: block; margin: 2px 0 8px; overflow: visible; }
 .bigrid line { stroke: var(--ink-dim); stroke-width: 1px; }
@@ -241,11 +241,12 @@ input[type="range"]::-moz-range-thumb { width: 5px; height: 18px; background: va
 .dyn-tabs button:disabled { cursor: default; }
 .dyn-row { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
 .dyn-row span { flex: none; min-width: 3em; color: var(--ink-dim); }
-.dyn-row select { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 2px; border: 1px solid var(--panel-line); border-radius: 0; background: var(--panel-bg); color: var(--ink); }
-.dyn-line { display: flex; gap: 10px; }
-.dyn-line .dyn-row:first-child { flex: 1.3; }
-.dyn-line .dyn-row:last-child span { min-width: 0; }
-.dyn-types { margin: 2px 0 0; max-height: 220px; overflow: auto; border-top: 1px solid var(--panel-line); padding-top: 3px; }
+.dyn-row select { flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 2px; border: 1px solid var(--panel-line); border-radius: 0; background-color: var(--panel-bg); color: var(--ink); }
+/* From [year] to [year]: the two boxes are the same width */
+.dyn-line { display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: center; gap: 4px 8px; margin: 2px 0; }
+.dyn-line .dyn-row { display: contents; }
+.dyn-line .dyn-row span { min-width: 0; }
+.dyn-types { margin: 2px 0 0; border-top: 1px solid var(--panel-line); padding-top: 3px; }
 .dyn-all label { font-weight: 600; }
 .dyn-topics { display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px; }
 .dyn-drop { border: 1px solid var(--panel-line); padding: 3px 6px; }
@@ -260,3 +261,18 @@ table.split thead th { color: var(--ink-faint); font-weight: 400; }
 table.split tr.total th, table.split tr.total td { font-weight: 700; }
 table.split tr.chosen th { font-weight: 700; }
 .panel-measure .block.wider { width: 68px; font-size: 13px; }
+
+/* Dropdowns: sharp corners in every browser (the native ones are rounded in some), with an arrow of our own.
+   A box with only one thing to show (`fixed`) keeps its look but has no arrow and does not open. */
+select { -webkit-appearance: none; appearance: none; border-radius: 0; padding-right: 20px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23555'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 6px center; background-size: 8px 5px; }
+select:disabled { color: var(--ink-faint); }
+select.fixed { background-image: none; padding-right: 2px; pointer-events: none; }
+
+/* Click panel: one folded section per dataset */
+details.panel-section { margin-top: 10px; border-top: 1px solid var(--panel-line); padding-top: 6px; }
+details.panel-section > summary { cursor: pointer; list-style: none; margin-bottom: 4px; }
+details.panel-section > summary::-webkit-details-marker { display: none; }
+details.panel-section > summary::before { content: '▸'; display: inline-block; width: 1.1em; }
+details.panel-section[open] > summary::before { content: '▾'; }
