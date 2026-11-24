@@ -43,8 +43,8 @@
         "--style-title": "normal",
         "--style-label": "normal",
         "--font-category": "Helvetica, Arial, sans-serif",
-        "--category-weight": "400",
-        "--category-size": "12.5px",
+        "--category-weight": "500",
+        "--category-size": "13px",
         "--style-category": "normal"
       },
       "map": {
