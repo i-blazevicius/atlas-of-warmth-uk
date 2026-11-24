@@ -24,7 +24,7 @@
         "--panel-line": "#c8c8c8",
         "--space": "#ffffff",
         "--font-title": "'Doto', sans-serif",
-        "--font-display": "'Noto Sans', sans-serif",
+        "--font-display": "Helvetica, Arial, sans-serif",
         "--font-body": "'Noto Sans', sans-serif",
         "--font-label": "'Noto Sans', sans-serif",
         "--font-ui": "'Noto Sans', sans-serif",
@@ -43,7 +43,7 @@
         "--style-title": "normal",
         "--style-label": "normal",
         "--font-category": "Helvetica, Arial, sans-serif",
-        "--category-weight": "600",
+        "--category-weight": "400",
         "--category-size": "12.5px",
         "--style-category": "normal"
       },
