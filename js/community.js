@@ -110,13 +110,16 @@ function dynamicDataset(cfg, measure) {
 // ═══ Community Spaces ═══════════════════════════════════════
 export async function createSpaces(cfg, ctx) {
   const { esc, fmt, loadCSV, problem, state } = ctx;
-  let meta, rows, councils;
+  let meta, rows, councils, areaRows = [];
   try {
     [meta, { rows }, { rows: councils }] = await Promise.all([
       fetch(cfg.meta).then((r) => { if (!r.ok) throw new Error(`${cfg.meta} answered ${r.status}`); return r.json(); }),
       loadCSV(cfg.file, cfg.label), loadCSV(cfg.councils, `${cfg.label}: councils`),
     ]);
   } catch (e) { problem(`${cfg.label} could not be loaded (${e.message}).`); return null; }
+  // Which council each small area lies in, so that the council's figure can be shown over its small areas in a comparison.
+  try { if (cfg.areaCouncils) areaRows = (await loadCSV(cfg.areaCouncils, `${cfg.label}: areas and councils`)).rows; }
+  catch (e) { problem(`${cfg.label}: areas could not be matched to councils (${e.message}); it cannot be compared with small-area measures.`); }
 
   const minStart = cfg.minStart ?? meta.rules?.min_stock_a_for_percent ?? 3;
   const labelOf = new Map(meta.categories.map((c) => [c.id, c.label]));
@@ -189,9 +192,17 @@ export async function createSpaces(cfg, ctx) {
   }
   const measure = { id: 'value', label: cfg.label, kind: 'rate', neutral: true, value: 'value', rank: null, areas: ['lad'], classes: makeClasses([], false), noDataLabel: 'No data' };
   const ds = dynamicDataset(cfg, measure);
-  ds.measures = [measure];
+  // The same figure, laid over the small areas (each takes its council's value): only for comparing with small-area measures.
+  const inherited = { id: 'inh', label: cfg.label, kind: 'rate', neutral: true, compareOnly: true, value: 'value inh', rank: null, areas: ['lsoa', 'dz', 'soa'], classes: measure.classes, noDataLabel: 'No data' };
+  ds.measures = areaRows.length ? [measure, inherited] : [measure];
+  ds.col['v:inh'] = 'value inh';
   for (const r of councils) {
     const code = String(r.code).trim(), row = { code, name: r.name, nation: NATION_OF(code), pname: '', value: '' };
+    ds.byCode.set(code, row);
+    (state.rows.get(code) ?? state.rows.set(code, []).get(code)).push({ dataset: ds, row });
+  }
+  for (const r of areaRows) {
+    const code = String(r.code).trim(), row = { code, name: '', nation: NATION_OF(code), pname: '', value: '', 'value inh': '', council: String(r.council).trim() };
     ds.byCode.set(code, row);
     (state.rows.get(code) ?? state.rows.set(code, []).get(code)).push({ dataset: ds, row });
   }
@@ -204,7 +215,8 @@ export async function createSpaces(cfg, ctx) {
   const wantedTypes = () => st.types.get(st.src.id);
   const coverage = (id) => {                     // how many councils get a number for this measure right now
     let n = 0, total = 0;
-    for (const code of ds.byCode.keys()) {
+    for (const [code, row] of ds.byCode) {
+      if (row.council) continue;
       const a = aggregate(st.src, st.win.id, code, wantedTypes());
       if (a) { total++; if (valueOf(id, a) != null) n++; }
     }
@@ -221,10 +233,12 @@ export async function createSpaces(cfg, ctx) {
     const def = MEASURES.find((m) => m.id === st.measure), types = wantedTypes();
     const vals = [];
     for (const [code, row] of ds.byCode) {
+      if (row.council) continue;
       const v = valueOf(st.measure, aggregate(st.src, st.win.id, code, types));
       row.value = v == null ? '' : v;
       if (v != null) vals.push(v);
     }
+    for (const row of ds.byCode.values()) if (row.council) row['value inh'] = ds.byCode.get(row.council)?.value ?? '';
     measure.classes = makeClasses(vals, !!def.diverging, def.unit);
     const n = types.size, total = st.src.cats.length;
     const subject = n === total ? 'all types' : `${n} of ${total} types`;
@@ -233,6 +247,7 @@ export async function createSpaces(cfg, ctx) {
     measure.noDataLabel = def.pct ? `No data, or fewer than ${minStart} at the start` : 'No data';
     measure.note = [st.src.note, def.pct ? `A percentage needs at least ${minStart} spaces at the start, so smaller councils are grey.` : '', cfg.note].filter(Boolean).join(' ');
     ds.empty = !vals.length;
+    Object.assign(inherited, { classes: measure.classes, label: `${measure.label} (council figure, shared by its areas)`, legendTitle: measure.legendTitle, noDataLabel: measure.noDataLabel, note: measure.note });
   }
 
   // ── Controls ──
@@ -289,11 +304,13 @@ export async function createSpaces(cfg, ctx) {
 
   // ── Click panel ──
   const yearsOf = () => [st.win.from, st.win.to];
-  ds.panelBody = (code) => {
+  ds.panelBody = (area) => {
+    const code = ds.byCode.get(area)?.council ?? area;           // a small area shows its council's figures
     const a = aggregate(st.src, st.win.id, code, wantedTypes()), row = ds.byCode.get(code);
     const def = MEASURES.find((m) => m.id === st.measure), cl = measure.classes, v = row.value === '' ? null : Number(row.value);
     const unit = def.unit ?? '';
     let h = `<p class="panel-sub">${esc(st.src.label)} · ${esc(windowText())}</p>`;
+    if (code !== area) h += `<p class="panel-note">Figures for the whole council, ${esc(row?.name ?? '')}.</p>`;
     if (!a) return h + `<p class="panel-note">${esc(st.src.label)} has no figures for this council in ${esc(windowText())}, or no type is ticked.</p>`;
     const colour = v == null ? ctx.NO_DATA : cl.colours[classOf(cl, v)];
     const shown = v == null ? '–' : `${def.diverging ? signed(v, unit === '%' ? 1 : 0) : v.toLocaleString('en-GB', { maximumFractionDigits: unit === '%' ? 1 : 0 })}${unit}`;

@@ -200,7 +200,7 @@ export default {
     // interest for earlier years, are added by giving them a layer id in the data file and a source here.
     {
       id: 'spaces', type: 'spaces', label: 'Community Spaces',
-      file: 'data/community-spaces.csv', councils: 'data/councils.csv', meta: 'data/community-spaces.json',
+      file: 'data/community-spaces.csv', councils: 'data/councils.csv', areaCouncils: 'data/area-council.csv', meta: 'data/community-spaces.json',
       minStart: 3,                          // a percentage needs at least this many at the start
       opacity: 0.8,
       sourceLine: 'Community spaces counted per council; each source is a different record of the same kind of place, so they are not added together.',
