@@ -827,7 +827,9 @@ function openArea(code) {
       const key = `${ds.id}:${m.id}`;
       const expandable = !!m.indicators?.includes(nation) && !!ds.indicatorsDir;
       const open = expandable && state.expanded.has(key);
-      body += `<div class="panel-measure${cur ? ' current' : ''}${expandable ? ' expandable' : ''}${open ? ' open' : ''}"${tip ? ` data-tip="${esc(tip)}"` : ''}` +
+      // A domain with indicators shows its rank inside the unfolded section; others keep it as a hover.
+      const rankHere = expandable && !rate && tip;
+      body += `<div class="panel-measure${cur ? ' current' : ''}${expandable ? ' expandable' : ''}${open ? ' open' : ''}"${tip ? ` data-${rankHere ? 'rank' : 'tip'}="${esc(tip)}"` : ''}` +
         (expandable ? ` data-key="${esc(key)}" data-ds="${esc(ds.id)}" data-m="${esc(m.id)}" data-nation="${esc(nation)}" role="button" tabindex="0" aria-expanded="${open}"` : '') + '>' +
         `<span class="block${has ? '' : ' none'}${rate ? ' wide' : ''}" style="background:${esc(colour)};color:${has ? textOn(colour) : 'inherit'}">${has ? (rate ? showRate(classesOf(ds, m), m, v) : v) : '–'}</span>` +
         `<span class="name">${esc(m.names?.[nation] ?? m.label)}</span>${expandable ? '<span class="caret" aria-hidden="true"></span>' : ''}</div>` +
@@ -902,22 +904,23 @@ async function fillIndicators(head) {
   if (!box?.classList.contains('indicators')) return;
   const code = state.selected;
   const ds = state.datasets.find((d) => d.id === head.dataset.ds);
-  box.innerHTML = '<p class="ind-note">Loading…</p>';
+  const rank = head.dataset.rank ? `<p class="ind-rank">${esc(head.dataset.rank)}</p>` : '';
+  box.innerHTML = rank + '<p class="ind-note">Loading…</p>';
   try {
     const { meta, rows } = await loadIndicators(ds, head.dataset.nation, head.dataset.m);
     if (!box.isConnected || state.selected !== code) return;            // another area was opened meanwhile
     const row = rows.get(code);
     const median = `median for ${NATIONS[head.dataset.nation] ?? head.dataset.nation}`;
-    box.innerHTML = row ? meta.map((m) => {
+    box.innerHTML = rank + (row ? meta.map((m) => {
       const v = row[m.id] === '' || row[m.id] == null ? NaN : Number(row[m.id]);
       const unit = m.unit ? ` <small>${esc(m.unit)}</small>` : '';
       return `<div class="indicator"><span class="ind-label">${esc(m.label)}</span>` +
         `<span class="ind-value">${Number.isFinite(v) ? `<b>${fmtVal(v)}</b>${unit}` : '<span class="ind-none">no data</span>'}` +
         `<small class="ind-median">${esc(median)} ${fmtVal(m.median)}</small></span></div>`;
     }).join('') + '<p class="ind-note">Raw indicator values, not ranks. Medians are across the nation’s areas.</p>'
-      : '<p class="ind-note">No indicator values for this area.</p>';
+      : '<p class="ind-note">No indicator values for this area.</p>');
   } catch (e) {
-    box.innerHTML = '<p class="ind-note">The indicators could not be loaded.</p>';
+    box.innerHTML = rank + '<p class="ind-note">The indicators could not be loaded.</p>';
     problem(`Indicators: ${e.message}`);
   }
 }
