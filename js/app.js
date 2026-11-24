@@ -667,7 +667,7 @@ function buildBiControls() {
     sel.id = `bi-${axis}`;
     for (const ds of state.datasets) {
       const g = Object.assign(document.createElement('optgroup'), { label: ds.label });
-      for (const m of ds.measures) g.append(Object.assign(document.createElement('option'), { value: measureId({ ds, m }), textContent: m.label }));
+      for (const m of ds.measures) g.append(Object.assign(document.createElement('option'), { value: measureId({ ds, m }), textContent: m.listLabel ?? m.label }));
       sel.append(g);
     }
     selects[axis] = sel;
@@ -677,7 +677,7 @@ function buildBiControls() {
   const byId = (id) => opts.find((x) => measureId(x) === id);
   // A choice is greyed out (and cannot be picked) when it is the other axis's measure or shares no area with it.
   const refresh = () => {
-    for (const sel of Object.values(selects)) for (const o of sel.options) { const x = byId(o.value); if (x) o.textContent = x.m.label; }   // labels of selection-driven measures change
+    for (const sel of Object.values(selects)) for (const o of sel.options) { const x = byId(o.value); if (x) o.textContent = x.m.listLabel ?? x.m.label; }   // labels of selection-driven measures change
     selects.x.value = measureId(state.bi.a); selects.y.value = measureId(state.bi.b);
     for (const [axis, other] of [['x', state.bi.b], ['y', state.bi.a]]) {
       for (const o of selects[axis].options) { const x = byId(o.value); o.disabled = !(axis === 'x' ? biAvailable(x, other) : biAvailable(other, x)); }

@@ -190,10 +190,10 @@ export async function createSpaces(cfg, ctx) {
       default: return pct(a.l);
     }
   }
-  const measure = { id: 'value', label: cfg.label, kind: 'rate', neutral: true, value: 'value', rank: null, areas: ['lad'], classes: makeClasses([], false), noDataLabel: 'No data' };
+  const measure = { id: 'value', listLabel: 'Custom selection', label: cfg.label, kind: 'rate', neutral: true, value: 'value', rank: null, areas: ['lad'], classes: makeClasses([], false), noDataLabel: 'No data' };
   const ds = dynamicDataset(cfg, measure);
   // The same figure, laid over the small areas (each takes its council's value): only for comparing with small-area measures.
-  const inherited = { id: 'inh', label: cfg.label, kind: 'rate', neutral: true, compareOnly: true, value: 'value inh', rank: null, areas: ['lsoa', 'dz', 'soa'], classes: measure.classes, noDataLabel: 'No data' };
+  const inherited = { id: 'inh', listLabel: 'Custom selection (council figure, shared by its areas)', label: cfg.label, kind: 'rate', neutral: true, compareOnly: true, value: 'value inh', rank: null, areas: ['lsoa', 'dz', 'soa'], classes: measure.classes, noDataLabel: 'No data' };
   ds.measures = areaRows.length ? [measure, inherited] : [measure];
   ds.col['v:inh'] = 'value inh';
   for (const r of councils) {
@@ -352,7 +352,7 @@ export async function createCommunities(cfg, ctx) {
   const minStart = cfg.minStart ?? 10;
   const YEARS = (code) => index.years[{ E: 'lsoa21', W: 'lsoa21', S: 'dz11', N: 'sdz21' }[NATION_OF(code)]];
   const yearText = (which) => (which === 'a' ? '2011' : '2021 (Scotland 2022)');
-  const measure = { id: 'value', label: cfg.label, kind: 'rate', neutral: true, value: 'value', rank: null, areas: ['lsoa', 'dz', 'soa'], classes: makeClasses([], false), noDataLabel: 'No data' };
+  const measure = { id: 'value', listLabel: 'Custom selection', label: cfg.label, kind: 'rate', neutral: true, value: 'value', rank: null, areas: ['lsoa', 'dz', 'soa'], classes: makeClasses([], false), noDataLabel: 'No data' };
   const ds = dynamicDataset(cfg, measure);
   ds.measures = [measure];
 

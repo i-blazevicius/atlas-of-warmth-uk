@@ -120,3 +120,20 @@ window.addEventListener('resize', close);
 window.addEventListener('blur', close);
 document.addEventListener('scroll', (e) => { if (pop && !pop.el.contains(e.target)) close(); }, true);
 document.addEventListener('focusout', (e) => { if (pop && e.target === pop.sel) setTimeout(() => { if (pop && document.activeElement !== pop.sel) close(); }, 0); });
+
+// Easier to hit: a click that lands just outside a tick box or round selector (a few pixels, on the panel's own background or text)
+// counts as a click on it. The boxes themselves keep their size.
+const NEAR = 6;
+document.addEventListener('click', (e) => {
+  if (!e.isTrusted || e.defaultPrevented || e.target.closest?.('input, select, button, a, label, textarea, .sel-pop') || !e.target.closest?.('#controls, #panel, .panel, aside, [id*=panel]')) return;
+  let best = null, bestD = Infinity;
+  for (const i of document.querySelectorAll('input[type=checkbox], input[type=radio]')) {
+    if (i.disabled) continue;
+    const r = i.getBoundingClientRect();
+    if (!r.width) continue;
+    const dx = Math.max(r.left - e.clientX, 0, e.clientX - r.right), dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom);
+    const d = Math.hypot(dx, dy);
+    if (d <= NEAR && d < bestD) { best = i; bestD = d; }
+  }
+  if (best) { e.preventDefault(); e.stopPropagation(); best.click(); }
+}, true);
