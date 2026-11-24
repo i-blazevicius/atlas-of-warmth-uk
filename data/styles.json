@@ -10,6 +10,11 @@
       "family": "Noto Sans",
       "google": "Noto+Sans:ital,wght@0,300..700;1,300..700",
       "fallback": "sans-serif"
+    },
+    {
+      "family": "Montserrat",
+      "google": "Montserrat:wght@500;600",
+      "fallback": "sans-serif"
     }
   ],
   "styles": [
@@ -41,7 +46,11 @@
         "--style-body": "normal",
         "--style-display": "normal",
         "--style-title": "normal",
-        "--style-label": "normal"
+        "--style-label": "normal",
+        "--font-category": "'Montserrat', sans-serif",
+        "--category-weight": "600",
+        "--category-size": "12.5px",
+        "--style-category": "normal"
       },
       "map": {
         "background": "#ffffff",

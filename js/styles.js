@@ -14,6 +14,7 @@ const CSS_KEYS = [
   '--font-body', '--weight-body', '--body-size', '--style-body',
   '--font-label', '--label-weight', '--label-size', '--style-label', '--label-case', '--label-tracking',
   '--font-ui',
+  '--font-category', '--category-weight', '--category-size', '--style-category',
 ];
 const PANEL_ALPHA = 0.92; // panels stay slightly see-through
 
