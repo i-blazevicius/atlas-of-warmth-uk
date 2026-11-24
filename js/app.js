@@ -440,7 +440,19 @@ function scaleControl() {
   return { onAdd() { map.on('move', draw); draw(); return el; }, onRemove() { map.off('move', draw); el.remove(); } };
 }
 
+// The settings of Communities and Community Spaces live under their own category. In "Compare two measures" the same boxes
+// (the very same elements, so the two places can never disagree) move under the axis that uses that category.
+function placeControls(slots) {
+  const spot = new Map();
+  if (slots) { const { a, b } = state.bi; if (a.ds.controls) spot.set(a.ds, slots.x); if (b.ds.controls && !spot.has(b.ds)) spot.set(b.ds, slots.y); }
+  for (const d of state.datasets) {
+    if (!d.controls || !d.homeBox) continue;
+    const to = spot.get(d) ?? d.homeBox;
+    if (d.controls.parentNode !== to) to.append(d.controls);
+  }
+}
 function setActive(ds, measure) {
+  placeControls();
   if (state.bi) state.bi.ds.visible = false;
   for (const d of state.datasets) d.visible = d === ds;
   ds.lastMeasure = measure;
@@ -516,6 +528,7 @@ function makeBiMeasure(a, b) {
 }
 function showBi() {
   const bi = state.bi;
+  placeControls(bi.slots);
   if (state.active?.dataset !== bi.ds) bi.prev = state.active;
   bi.ds.visible = true;
   for (const d of state.datasets) d.visible = d === bi.a.ds || d === bi.b.ds;       // the click panel lists the two measures' datasets
@@ -624,6 +637,7 @@ function buildDatasetControls() {
       list.append(label);
     }
     group.append(sum, list);
+    if (ds.controls) ds.homeBox = group;
     box.append(group);
   }
 }
@@ -670,7 +684,8 @@ function buildBiControls() {
     }
   };
   const swap = Object.assign(document.createElement('button'), { type: 'button', className: 'bi-swap', textContent: '⇅ Swap', title: 'Swap the two measures' });
-  body.append(mkSelect('x', 'Across'), mkSelect('y', 'Up'), swap);
+  state.bi.slots = { x: Object.assign(document.createElement('div'), { className: 'bi-slot' }), y: Object.assign(document.createElement('div'), { className: 'bi-slot' }) };
+  body.append(mkSelect('x', 'Across'), state.bi.slots.x, mkSelect('y', 'Up'), state.bi.slots.y, swap);
   selects.x.addEventListener('change', () => { state.bi.a = byId(selects.x.value); refresh(); showBi(); });
   selects.y.addEventListener('change', () => { state.bi.b = byId(selects.y.value); refresh(); showBi(); });
   swap.addEventListener('click', () => { [state.bi.a, state.bi.b] = [state.bi.b, state.bi.a]; refresh(); showBi(); });

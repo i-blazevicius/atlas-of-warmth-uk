@@ -286,3 +286,7 @@ details.panel-section > summary { cursor: pointer; list-style: none; margin-bott
 details.panel-section > summary::-webkit-details-marker { display: none; }
 details.panel-section > summary::before { content: '▸'; display: inline-block; width: 1.1em; }
 details.panel-section[open] > summary::before { content: '▾'; }
+
+/* Compare two measures: the settings of Communities / Community Spaces under the axis that uses them */
+.bi-slot:empty { display: none; }
+.bi-slot { margin: 2px 0 10px; padding-left: 8px; border-left: 1px solid var(--panel-line); }
