@@ -164,7 +164,25 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); margi
 }
 .panel-note { margin: 10px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.4; }
 .panel-parent { margin: 0 0 8px; color: var(--ink-dim); }
-.legend-note { margin: 8px 0 0; max-width: 250px; color: var(--ink-faint); font-size: 11px; line-height: 1.35; }
+/* The ⓘ at the bottom right of the legend: the same plain letter as the credits button; its panel opens to the right of the legend */
+.info-btn {
+  position: absolute; right: 0; bottom: 0; width: 29px; height: 29px; padding: 0; border: 0; border-radius: 0; background: none;
+  color: var(--ink); font: 500 20px/29px var(--font-title); text-align: center; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.info-btn::before { content: 'i'; }
+.info-btn:focus { outline: none; }
+.info-btn:focus-visible { outline: 1px dotted var(--ink-faint); outline-offset: -4px; }
+.info-btn[hidden], .info-panel[hidden] { display: none; }
+.info-panel {
+  position: absolute; z-index: 3; left: calc(100% + 8px); bottom: 0; width: 320px; max-height: calc(100vh - 64px); overflow: auto;
+  padding: 12px 16px 14px; background: var(--panel-bg); border: 1px solid var(--panel-line); border-radius: var(--radius);
+  font-size: 12px; line-height: 1.45; color: var(--ink-dim);
+}
+.info-panel p { margin: 0 0 8px; }
+.info-panel p:last-child { margin-bottom: 0; }
+.info-panel .info-title { margin: 0 24px 8px 0; font-family: var(--font-label); font-weight: var(--label-weight); font-size: var(--label-size); text-transform: var(--label-case); letter-spacing: var(--label-tracking); color: var(--ink-dim); }
+.info-panel .close { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: var(--ink-dim); font-size: 22px; line-height: 1; cursor: pointer; }
+@media (max-width: 760px) { .info-panel { left: 0; bottom: calc(100% + 8px); width: 100%; max-height: 50vh; } }
 /* MapLibre's own controls, in the same square, thin-bordered style as the panels */
 .maplibregl-ctrl-bottom-left { left: 38px; }
 .maplibregl-ctrl-bottom-left .scalebar { margin: 0 0 10px 0; }

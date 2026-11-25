@@ -281,7 +281,7 @@ export async function createSpaces(cfg, ctx) {
   const controls = el('div', { className: 'measures dyn-body' });
   const tabs = el('div', { className: 'dyn-tabs', role: 'tablist' });
   const fromSel = el('select'), toSel = el('select'), measureSel = el('select');
-  const typeBox = el('div'), noteBox = el('p', { className: 'dyn-note' });
+  const typeBox = el('div');
   let tickers = new Map();
   const years = (src) => [...new Set(src.windows_.map((w) => w.from))];
   function fillWindows() {
@@ -309,10 +309,9 @@ export async function createSpaces(cfg, ctx) {
     if (!tickers.has(src.id)) tickers.set(src.id, tickList({ items: src.cats, selected: st.types.get(src.id), idPrefix: `sp-${src.id}`, blocked: () => blockedTypes(src, st.win), why: src.unavailable?.[0]?.short ?? '', onChange: () => { fillMeasures(); refresh(); } }));
     typeBox.replaceChildren(tickers.get(st.src.id).box);
     syncTypes();
-    noteBox.textContent = srcNote();
   }
-  // The window decides which types can be ticked (and the note under them): called whenever it changes.
-  function syncTypes() { tickers.get(st.src.id)?.sync(); noteBox.textContent = srcNote(); }
+  // The window decides which types can be ticked: called whenever it changes.
+  function syncTypes() { tickers.get(st.src.id)?.sync(); }
   for (const s of sources) {
     tabs.append(el('button', { type: 'button', textContent: s.label, role: 'tab', title: s.hint ?? '' }));
     tabs.lastChild.dataset.src = s.id;
@@ -325,7 +324,7 @@ export async function createSpaces(cfg, ctx) {
   });
   toSel.addEventListener('change', () => { st.win = st.src.windows_.find((w) => w.from === st.win.from && w.to === Number(toSel.value)); syncTypes(); fillMeasures(); refresh(); });
   measureSel.addEventListener('change', () => { st.measure = measureSel.value; refresh(); });
-  controls.append(tabs, el('div', { className: 'dyn-line' }, fieldRow('From', fromSel), fieldRow('to', toSel)), fieldRow('Show', measureSel), typeBox, noteBox);
+  controls.append(tabs, el('div', { className: 'dyn-line' }, fieldRow('From', fromSel), fieldRow('to', toSel)), fieldRow('Show', measureSel), typeBox);
   ds.controls = controls;
   ds.onActivate = () => { compute(); ctx.refresh(ds); };
   showSource();

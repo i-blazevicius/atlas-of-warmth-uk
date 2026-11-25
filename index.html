@@ -36,6 +36,13 @@
       <div class="focus-panel" id="focus-panel" hidden></div>
       <div class="legend" id="legend"></div>
     </div>
+    <!-- How the data was made and how to read it: opened by the ⓘ button, to the right of the legend -->
+    <button type="button" class="info-btn" id="legend-info" aria-label="About this data" aria-controls="legend-about" aria-expanded="false" hidden></button>
+    <aside class="info-panel" id="legend-about" hidden>
+      <button type="button" class="close" aria-label="Close">×</button>
+      <p class="info-title">About this data</p>
+      <div id="legend-about-body"></div>
+    </aside>
   </details>
   </div>
 

@@ -773,8 +773,23 @@ function renderLegend() {
     (lg.grid ? gridSvg(lg.grid) : '') +
     (lg.head ? `<div class="legend-row legend-head"><i></i>${esc(lg.head)}</div>` : '') +
     lg.rows.map((r) => `<div class="legend-row selectable${state.focus?.id === String(r.key) ? ' sel' : ''}" data-key="${esc(String(r.key))}" role="button" tabindex="0"><i style="background:${esc(r.colour)}"></i>${esc(r.label)}</div>`).join('') +
-    (lg.note ? `<p class="legend-note">${esc(lg.note)}</p>` : '');
+    '';
+  renderAbout(lg.note);
 }
+// The explanation of the data (how it was made, how to read it) is not in the legend: the ⓘ button at its bottom right opens it
+// in a panel beside the legend. It stays open while the settings change and shows the new text.
+function renderAbout(note) {
+  const btn = $('legend-info'), panel = $('legend-about');
+  if (!note) state.aboutOpen = false;
+  btn.hidden = !note;
+  panel.hidden = !note || !state.aboutOpen;
+  btn.setAttribute('aria-expanded', String(!!note && !!state.aboutOpen));
+  $('legend-about-body').innerHTML = note ? esc(note).split('\n').map((t) => `<p>${t}</p>`).join('') : '';
+}
+const setAbout = (open) => { state.aboutOpen = open; renderAbout(legendModel()?.note); };
+$('legend-info').addEventListener('click', () => setAbout(!state.aboutOpen));
+$('legend-about').querySelector('.close').addEventListener('click', () => { setAbout(false); $('legend-info').focus(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && state.aboutOpen) setAbout(false); });
 
 // ── Area panel ─────────────────────────────────────────────
 // Only datasets that are switched on are listed.
