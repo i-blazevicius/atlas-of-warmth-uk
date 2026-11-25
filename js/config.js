@@ -196,8 +196,9 @@ export default {
     // Community Spaces: change in the number of community spaces per council (tools/build_community_data.py).
     // A source is one layer of data/community-spaces.csv. Sources are kept apart because they overlap (one hall can be in the
     // OpenStreetMap layer and in the charity registers), so their counts are never added together. `windows` limits the
-    // from → to pairs offered (leave it out to offer every window in the file): new layers, such as Ordnance Survey points of
-    // interest for earlier years, are added by giving them a layer id in the data file and a source here.
+    // from → to pairs offered (leave it out to offer every window in the file): new layers (the Ordnance Survey one,
+    // tools/add_os_layer.py) are added by giving them a layer id in the data file and a source here. `unavailable` lists
+    // types that cannot be compared from a given start (matched against the start of the window id).
     {
       id: 'spaces', type: 'spaces', label: 'Community Spaces',
       file: 'data/community-spaces.csv', councils: 'data/councils.csv', areaCouncils: 'data/area-council.csv', meta: 'data/community-spaces.json',
@@ -207,6 +208,14 @@ export default {
       sources: [
         { id: 'cs', label: 'OpenStreetMap', windows: ['2022-2025'],
           note: 'Places mapped by volunteers on OpenStreetMap and checked against Ordnance Survey. Only 2022 to 2025 is shown: over longer periods the count mostly reflects growing map coverage.' },
+        { id: 'os', label: 'Ordnance Survey', defaultWindow: '2018-03_2024-12',
+          note: 'Points of interest from Ordnance Survey’s historic releases (March 2015, March 2018, March 2020, March 2022 and December 2024), Great Britain only. A place counts as new or lost only if no point of the same kind lay within 100 m in the other release. Releases are not on 1 January, so windows do not line up exactly with OpenStreetMap’s: read it beside the other sources, not added to them.',
+          // Types that cannot be compared from a given start: they are greyed out, left unticked and left out of every figure.
+          unavailable: [{
+            from: '2015-03', types: ['os.hall', 'os.youth', 'os.community_project', 'os.religious_org'],
+            short: 'Not comparable from 2015: the Ordnance Survey recorded far more of these places from 2018, a change in coverage rather than new places.',
+            why: 'From 2015 the halls, youth organisations, community networks and projects and religious organisations are switched off: the Ordnance Survey recorded far more of them from 2018 (halls rose from 9,176 to 20,799), a change in coverage rather than new places. Windows from 2015 are of low quality.',
+          }] },
         { id: 'char', label: 'Charity registers',
           note: 'Charities picked by name from the registers (a candidate list, not a census). England and Wales: new registrations only, since removed charities have no postcode. Scotland: new and removed. Northern Ireland: new only, and recent rises partly reflect the regulator catching up with existing bodies.' },
         { id: 'biz', label: 'Business counts',

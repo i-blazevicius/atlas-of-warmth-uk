@@ -173,6 +173,54 @@
    "layer": "cs_council",
    "label": "Council Run",
    "group": "cs_council"
+  },
+  {
+   "id": "os.hall",
+   "layer": "os",
+   "label": "Halls and community centres",
+   "group": "hall"
+  },
+  {
+   "id": "os.youth",
+   "layer": "os",
+   "label": "Youth organisations",
+   "group": "youth"
+  },
+  {
+   "id": "os.community_project",
+   "layer": "os",
+   "label": "Community networks and projects",
+   "group": "hall"
+  },
+  {
+   "id": "os.social_club",
+   "layer": "os",
+   "label": "Social clubs",
+   "group": "club"
+  },
+  {
+   "id": "os.place_of_worship",
+   "layer": "os",
+   "label": "Places of worship",
+   "group": "religious"
+  },
+  {
+   "id": "os.religious_org",
+   "layer": "os",
+   "label": "Religious organisations",
+   "group": "religious"
+  },
+  {
+   "id": "os.library",
+   "layer": "os",
+   "label": "Libraries",
+   "group": "library"
+  },
+  {
+   "id": "os.pub",
+   "layer": "os",
+   "label": "Pubs, bars and inns",
+   "group": "pub"
   }
  ],
  "layers": [
@@ -195,6 +243,11 @@
    "id": "cs_council",
    "label": "Council-run community spaces (London FOI, partial)",
    "flows": "gains_and_losses"
+  },
+  {
+   "id": "os",
+   "label": "OS Points of Interest (historic releases, Great Britain)",
+   "flows": "gains_and_losses"
   }
  ],
  "rules": {
@@ -209,6 +262,16 @@
   "biz": "UK Business Counts local units (pubs, religious organisations, other membership organisations, libraries, sports clubs), rounded to 5 at source; whole UK incl. Scotland and NI, council level. Net change only. Small-area business counts are deliberately not included (too few units per area).",
   "char": "Charities picked by name (candidate list, not a census). England and Wales: gains and stock only, because removed charities carry no postcode in the register (national removals by window: 2022-2025 677, 2020-2025 1064, 2018-2025 1611, 2015-2025 2285). Scotland (OSCR): active and removed registers both carry postcodes and removal dates, so gains, losses and net are real; removals before 2013 are mostly a one-off register clean-up. Northern Ireland (CCNI): placed by town from the address (no postcodes); removed charities have no date, so gains only and stock is of charities still registered; the 2019-2023 'gains' are largely charities registered when the regulator caught up with existing bodies, not new spaces (quality low). Charities sharing one umbrella address (e.g. Girlguiding units) are left out. England and Wales removals by window are in national_removals.csv, split into probable closures and successions (assets passed on, so the hall may continue); they cannot be placed by council.",
   "cs_council": "London FOI to councils (Jan 2024): council-run spaces only; definitions differ by borough; some boroughs did not reply.",
-  "scale": "Community-space, business and charity data are published at council level only: median council has about 21 OSM spaces and about 170 business units, while an LSOA typically has 0-1. Census data stays on LSOAs/data zones/SOAs in census_data.zip."
+  "scale": "Community-space, business and charity data are published at council level only: median council has about 21 OSM spaces and about 170 business units, while an LSOA typically has 0-1. Census data stays on LSOAs/data zones/SOAs in census_data.zip.",
+  "os": "Great Britain only (no Northern Ireland). Supplementary pack: the point-level OS data is not included (licence). Release dates are March 2015, March 2018, March 2020, March 2022 and December 2024, so windows do not line up exactly with the 1 January OSM windows. gains/losses: a point new to (or gone from) the release and with no point of the same class within 100 m in the other release; gains_raw/losses_raw: plain differences in the persistent ref_no, which overstate churn because about 20% of ref_nos change between releases while the place stays. Windows starting 2015-03 are all marked quality low. For halls and community centres, youth organisations, community networks and projects and religious organisations they are NOT comparable: OS added about 13,000 halls in 2018 (9,176 to 20,799), a change in coverage, not new halls. Disable those four categories for 2015 windows in the map; the rows are kept so the choice is yours. Use as a cross-check on, or a second source beside, the OSM and charity layers within a window; do not add OS counts to OSM counts."
+ },
+ "releases": {
+  "os": {
+   "2015-03": "OS Points of Interest release 2015-03",
+   "2018-03": "OS Points of Interest release 2018-03",
+   "2020-03": "OS Points of Interest release 2020-03",
+   "2022-03": "OS Points of Interest release 2022-03",
+   "2024-12": "OS Points of Interest release 2024-12"
+  }
  }
 }

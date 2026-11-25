@@ -82,6 +82,9 @@ def build_spaces():
     json.dump({'categories': cats['categories'], 'layers': [{k: v for k, v in l.items() if k != 'categories'} for l in cats['layers']],
                'rules': cats['rules'], 'notes': cats['notes']}, open(OUT / 'community-spaces.json', 'w'), indent=1)
     print('community-spaces.csv', len(out), 'rows;', a['area_code'].nunique(), 'councils')
+    if (SRC / 'map/area_changes_os_lad.csv').exists():           # Ordnance Survey supplement, added as its own layer
+        from add_os_layer import add_os_layer
+        add_os_layer()
 
 
 # ── Census ─────────────────────────────────────────────────────────────────────────────────────────

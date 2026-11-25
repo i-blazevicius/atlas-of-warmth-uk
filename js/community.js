@@ -74,21 +74,27 @@ const el = (tag, props = {}, ...kids) => {
 };
 const option = (value, text) => Object.assign(document.createElement('option'), { value, textContent: text });
 const fieldRow = (label, control) => el('label', { className: 'dyn-row' }, el('span', { textContent: label }), control);
-// A list of ticks with "Select all" on top; `onChange(set)` gets the ticked ids.
-function tickList({ items, selected, onChange, idPrefix }) {
+// A list of ticks with "Select all" on top; `onChange(set)` gets the ticked ids. `blocked()` gives the ids that cannot be
+// ticked right now: they are greyed out and show unticked, but stay in `selected` so they return when they become available.
+function tickList({ items, selected, onChange, idPrefix, blocked = () => new Set(), why = '' }) {
   const box = el('div', { className: 'dyn-types' });
   const all = el('input', { type: 'checkbox', id: `${idPrefix}-all` });
   box.append(el('div', { className: 'layer-row sub dyn-all' }, all, el('label', { htmlFor: all.id, textContent: 'Select all / none' })));
-  const inputs = new Map();
+  const inputs = new Map(), rows = new Map();
   for (const it of items) {
     const c = el('input', { type: 'checkbox', id: `${idPrefix}-${it.id}`, checked: selected.has(it.id) });
     inputs.set(it.id, c);
     c.addEventListener('change', () => { c.checked ? selected.add(it.id) : selected.delete(it.id); sync(); onChange(selected); });
     box.append(el('div', { className: 'layer-row sub' }, c, el('label', { htmlFor: c.id, textContent: it.label })));
+    rows.set(it.id, c.parentElement);
   }
   const sync = () => {
-    all.checked = selected.size === items.length; all.indeterminate = selected.size > 0 && selected.size < items.length;
-    for (const [id, c] of inputs) c.checked = selected.has(id);
+    const off = blocked(), live = items.filter((it) => !off.has(it.id)), n = live.filter((it) => selected.has(it.id)).length;
+    all.checked = live.length > 0 && n === live.length; all.indeterminate = n > 0 && n < live.length;
+    for (const [id, c] of inputs) {
+      c.checked = selected.has(id) && !off.has(id); c.disabled = off.has(id);
+      rows.get(id).classList.toggle('off', off.has(id)); rows.get(id).title = off.has(id) ? why : '';
+    }
   };
   all.addEventListener('change', () => { selected.clear(); if (all.checked) for (const it of items) selected.add(it.id); sync(); onChange(selected); });
   sync();
@@ -106,6 +112,13 @@ function dynamicDataset(cfg, measure) {
   };
   return ds;
 }
+
+// A window is "2022-2025" (whole years) or "2015-03_2018-03" (release months): both ends as a year and the text to show.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const parseWindow = (w) => (w.includes('_') ? w.split('_') : w.split('-')).map((p) => {
+  const [y, m] = p.split('-').map(Number);
+  return { y, text: m ? `${MONTHS[m - 1]} ${y}` : String(y) };
+});
 
 // ═══ Community Spaces ═══════════════════════════════════════
 export async function createSpaces(cfg, ctx) {
@@ -133,7 +146,7 @@ export async function createSpaces(cfg, ctx) {
     byArea.set(r.category, [toNum(r.stock_a), toNum(r.stock_b), toNum(r.gains), toNum(r.losses)]);
   }
   const windowsOf = (src) => [...(data.get(src.id)?.keys() ?? [])].filter((w) => !src.windows || src.windows.includes(w))
-    .map((w) => { const [a, b] = w.split('-').map(Number); return { id: w, from: a, to: b }; }).sort((p, q) => p.from - q.from || p.to - q.to);
+    .map((w) => { const [a, b] = parseWindow(w); return { id: w, from: a.y, to: b.y, fromText: a.text, toText: b.text }; }).sort((p, q) => p.from - q.from || p.to - q.to);
   const sources = cfg.sources.map((s) => ({ ...s, windows_: windowsOf(s), cats: catsOf(s.id) })).filter((s) => s.windows_.length && s.cats.length);
   if (!sources.length) { problem(`${cfg.label}: the data file holds none of the listed sources.`); return null; }
 
@@ -210,9 +223,21 @@ export async function createSpaces(cfg, ctx) {
   // ── State ──
   const first = sources[0];
   const st = { src: first, win: null, measure: 'net_pct', types: new Map(sources.map((s) => [s.id, new Set(s.cats.map((c) => c.id))])) };
-  const pickWindow = (src) => src.windows_.find((w) => w.id === '2022-2025') ?? src.windows_.at(-1);
+  const pickWindow = (src) => src.windows_.find((w) => w.id === (src.defaultWindow ?? '2022-2025')) ?? src.windows_.at(-1);
   st.win = pickWindow(first);
-  const wantedTypes = () => st.types.get(st.src.id);
+  // Types a source cannot give for the window (config `unavailable`): ticked or not, they are left out.
+  const blockedCache = new Map();
+  const blockedRule = (src = st.src, win = st.win) => (src.unavailable ?? []).find((u) => win.id.startsWith(u.from));
+  const blockedTypes = (src = st.src, win = st.win) => {
+    const key = `${src.id}|${win.id}`, rule = blockedRule(src, win);
+    if (!blockedCache.has(key)) blockedCache.set(key, new Set(rule?.types ?? []));
+    return blockedCache.get(key);
+  };
+  const wantedTypes = () => {
+    const off = blockedTypes();
+    return off.size ? new Set([...st.types.get(st.src.id)].filter((id) => !off.has(id))) : st.types.get(st.src.id);
+  };
+  const srcNote = () => [st.src.note, blockedRule()?.why].filter(Boolean).join(' ');
   const coverage = (id) => {                     // how many councils get a number for this measure right now
     let n = 0, total = 0;
     for (const [code, row] of ds.byCode) {
@@ -228,7 +253,7 @@ export async function createSpaces(cfg, ctx) {
     return MEASURES.find((m) => available(m.id))?.id ?? 'net_pct';
   };
 
-  const windowText = () => `${st.win.from} → ${st.win.to}`;
+  const windowText = () => `${st.win.fromText} → ${st.win.toText}`;
   function compute() {
     const def = MEASURES.find((m) => m.id === st.measure), types = wantedTypes();
     const vals = [];
@@ -240,12 +265,12 @@ export async function createSpaces(cfg, ctx) {
     }
     for (const row of ds.byCode.values()) if (row.council) row['value inh'] = ds.byCode.get(row.council)?.value ?? '';
     measure.classes = makeClasses(vals, !!def.diverging, def.unit);
-    const n = types.size, total = st.src.cats.length;
-    const subject = n === total ? 'all types' : `${n} of ${total} types`;
+    const n = types.size, off = blockedTypes().size, total = st.src.cats.length - off;
+    const subject = n === total ? (off ? 'all comparable types' : 'all types') : `${n} of ${total} ${off ? 'comparable ' : ''}types`;
     measure.label = `${st.src.label} · ${def.label.toLowerCase()}, ${windowText()}`;
     measure.legendTitle = [def.label, `${st.src.label} · ${windowText()} · ${subject}`, 'Community Spaces · local authorities'];
     measure.noDataLabel = def.pct ? `No data, or fewer than ${minStart} at the start` : 'No data';
-    measure.note = [st.src.note, def.pct ? `A percentage needs at least ${minStart} spaces at the start, so smaller councils are grey.` : '', cfg.note].filter(Boolean).join(' ');
+    measure.note = [srcNote(), def.pct ? `A percentage needs at least ${minStart} spaces at the start, so smaller councils are grey.` : '', cfg.note].filter(Boolean).join(' ');
     ds.empty = !vals.length;
     Object.assign(inherited, { classes: measure.classes, label: `${measure.label} (council figure, shared by its areas)`, legendTitle: measure.legendTitle, noDataLabel: measure.noDataLabel, note: measure.note });
   }
@@ -280,10 +305,14 @@ export async function createSpaces(cfg, ctx) {
     fillWindows();
     st.measure = bestMeasure();
     fillMeasures();
-    if (!tickers.has(st.src.id)) tickers.set(st.src.id, tickList({ items: st.src.cats, selected: st.types.get(st.src.id), idPrefix: `sp-${st.src.id}`, onChange: () => { fillMeasures(); refresh(); } }));
+    const src = st.src;
+    if (!tickers.has(src.id)) tickers.set(src.id, tickList({ items: src.cats, selected: st.types.get(src.id), idPrefix: `sp-${src.id}`, blocked: () => blockedTypes(src, st.win), why: src.unavailable?.[0]?.short ?? '', onChange: () => { fillMeasures(); refresh(); } }));
     typeBox.replaceChildren(tickers.get(st.src.id).box);
-    noteBox.textContent = st.src.note ?? '';
+    syncTypes();
+    noteBox.textContent = srcNote();
   }
+  // The window decides which types can be ticked (and the note under them): called whenever it changes.
+  function syncTypes() { tickers.get(st.src.id)?.sync(); noteBox.textContent = srcNote(); }
   for (const s of sources) {
     tabs.append(el('button', { type: 'button', textContent: s.label, role: 'tab', title: s.hint ?? '' }));
     tabs.lastChild.dataset.src = s.id;
@@ -292,9 +321,9 @@ export async function createSpaces(cfg, ctx) {
   fromSel.addEventListener('change', () => {
     const from = Number(fromSel.value), ok = st.src.windows_.filter((w) => w.from === from);
     st.win = ok.find((w) => w.to === st.win.to) ?? ok.at(-1);
-    fillWindows(); fillMeasures(); refresh();
+    fillWindows(); syncTypes(); fillMeasures(); refresh();
   });
-  toSel.addEventListener('change', () => { st.win = st.src.windows_.find((w) => w.from === st.win.from && w.to === Number(toSel.value)); fillMeasures(); refresh(); });
+  toSel.addEventListener('change', () => { st.win = st.src.windows_.find((w) => w.from === st.win.from && w.to === Number(toSel.value)); syncTypes(); fillMeasures(); refresh(); });
   measureSel.addEventListener('change', () => { st.measure = measureSel.value; refresh(); });
   controls.append(tabs, el('div', { className: 'dyn-line' }, fieldRow('From', fromSel), fieldRow('to', toSel)), fieldRow('Show', measureSel), typeBox, noteBox);
   ds.controls = controls;
@@ -303,7 +332,7 @@ export async function createSpaces(cfg, ctx) {
   compute();
 
   // ── Click panel ──
-  const yearsOf = () => [st.win.from, st.win.to];
+  const yearsOf = () => [st.win.fromText, st.win.toText];
   ds.panelBody = (area) => {
     const code = ds.byCode.get(area)?.council ?? area;           // a small area shows its council's figures
     const a = aggregate(st.src, st.win.id, code, wantedTypes()), row = ds.byCode.get(code);
@@ -325,11 +354,11 @@ export async function createSpaces(cfg, ctx) {
       return `<tr class="${cls}"><th>${esc(name)}</th><td>${n(sa)}</td><td>${n(sb)}</td><td>${net == null ? '–' : signed(net)}</td><td>${pc(net, sa)}</td></tr>`;
     };
     h += `<table class="split"><thead><tr><th></th><th>${y0}</th><th>${y1}</th><th>Net</th><th>%</th></tr></thead><tbody>`;
-    h += line(wantedTypes().size === st.src.cats.length ? 'All types' : 'Selected types', [a.sa, a.sb, a.g, a.l], 'total');
+    h += line(wantedTypes().size === st.src.cats.length - blockedTypes().size ? (blockedTypes().size ? 'All comparable types' : 'All types') : 'Selected types', [a.sa, a.sb, a.g, a.l], 'total');
     for (const c of st.src.cats) if (a.per.has(c.id)) h += line(c.label, a.per.get(c.id));
     h += '</tbody></table>';
     if (a.g != null || a.l != null) h += `<p class="panel-note">${a.g != null ? `New: ${fmt(a.g)}` : ''}${a.g != null && a.l != null ? ' · ' : ''}${a.l != null ? `Lost: ${fmt(a.l)}` : ''}. Net is new minus lost.</p>`;
-    if (st.src.note) h += `<p class="panel-note">${esc(st.src.note)}</p>`;
+    if (srcNote()) h += `<p class="panel-note">${esc(srcNote())}</p>`;
     h += `<p class="panel-note">${esc(cfg.sourceLine ?? '')}</p>`;
     return h;
   };
